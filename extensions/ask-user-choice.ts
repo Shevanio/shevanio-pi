@@ -4,7 +4,7 @@ import { Container, type SelectItem, SelectList, Text } from "@earendil-works/pi
 import { type Static, Type } from "typebox";
 
 const CHOICE_TOOL_NAME = "ask_user_choice";
-const ASK_USER_CHOICE_BLOCKED_EVENT = "gentle-pi:ask-user-choice:blocked";
+const ASK_USER_CHOICE_BLOCKED_EVENT = "shevanio-pi:ask-user-choice:blocked";
 
 const ChoiceOptionSchema = Type.Object(
 	{
