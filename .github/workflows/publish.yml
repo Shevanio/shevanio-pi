@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   publish:
-    if: github.repository == 'Gentleman-Programming/gentle-pi'
+    if: github.repository == 'Shevanio/shevanio-pi'
     environment: npm
     runs-on: ubuntu-latest
     permissions:
@@ -67,14 +67,17 @@ jobs:
 
           const expectedRepository = {
             type: "git",
-            url: "git+https://github.com/Gentleman-Programming/gentle-pi.git",
+            url: "git+https://github.com/Shevanio/shevanio-pi.git",
           };
+          if (packageJson.name !== "shevanio-pi") {
+            throw new Error("package.json.name must exactly match shevanio-pi.");
+          }
           if (
             packageJson.repository?.type !== expectedRepository.type ||
             packageJson.repository?.url !== expectedRepository.url
           ) {
             throw new Error(
-              "package.json.repository must exactly match Gentleman-Programming/gentle-pi.",
+              "package.json.repository must exactly match Shevanio/shevanio-pi.",
             );
           }
           NODE

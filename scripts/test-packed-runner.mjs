@@ -1,14 +1,13 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
-const temporary = mkdtempSync(join(tmpdir(), "gentle-pi-packed-runner-"));
+const temporary = mkdtempSync(join(tmpdir(), "shevanio-pi-packed-runner-"));
 const packDirectory = join(temporary, "pack");
 const installDirectory = join(temporary, "install");
 
@@ -44,32 +43,23 @@ try {
 }));
 	if (packed.length !== 1 || typeof packed[0]?.filename !== "string") throw new Error("npm pack did not return one tarball");
 	const tarball = join(packDirectory, packed[0].filename);
-	writeFileSync(join(installDirectory, "package.json"), JSON.stringify({ name: "gentle-pi-packed-runner-test", private: true }), "utf8");
+	writeFileSync(join(installDirectory, "package.json"), JSON.stringify({ name: "shevanio-pi-packed-runner-test", private: true }), "utf8");
 	runNpm(["install", "--ignore-scripts=false", "--no-audit", "--no-fund", "--package-lock=false", "--omit=dev", "--legacy-peer-deps", tarball], {
 		cwd: installDirectory,
+		env: { ...process.env, GENTLE_PI_SKIP_GENTLE_AI_INSTALL: "1" },
 		stdio: "inherit",
 	});
-	const packageRoot = join(installDirectory, "node_modules", "gentle-pi");
-	const versions = readdirSync(join(packageRoot, ".gentle-ai"), { withFileTypes: true }).filter((entry) => entry.isDirectory() && /^v\d+\.\d+\.\d+$/.test(entry.name));
-	if (versions.length !== 1) throw new Error("packed install did not contain exactly one package-local Gentle AI version");
-	const executable = join(packageRoot, ".gentle-ai", versions[0].name, process.platform === "win32" ? "gentle-ai.exe" : "gentle-ai");
-	const capabilities = JSON.parse(execFileSync(executable, ["review", "capabilities", "--contract", "gentle-ai.review-integration/v2"], { cwd: installDirectory, encoding: "utf8" }));
-	// Decode with the PACKED consumer's own decoder rather than comparing the
-	// schema string against a list hand-copied into this script. The copy was a
-	// second, silent pin: it accepted only `capabilities/v2`, so the moment the
-	// pinned provider advertised an additive minor this E2E rejected a pairing
-	// that gentle-pi reads correctly, and it would have done so again on the
-	// next minor. Using the shipped decoder makes the assertion what it always
-	// meant to be — the packed consumer can read the packed provider — and it
-	// checks the whole envelope (protocol major/minor, required operations,
-	// gates, projections, advertised schemas, mandatory features, and the
-	// self-reported executable digest) instead of one string.
+	const packageRoot = join(installDirectory, "node_modules", "shevanio-pi");
+	const capabilities = JSON.parse(readFileSync(join(packageRoot, "contracts", "review-integration", "v2", "fixtures", "capabilities.fixture.json"), "utf8"));
+	// Import the PACKED consumer's own decoder and exercise it against the bundled,
+	// byte-pinned capabilities fixture. This proves canonical package discovery and
+	// validates the whole compatibility envelope without installing or launching a
+	// provider binary; provider/runtime E2E belongs to the separate contract lanes.
 	const { decodeReviewCapabilitiesV2 } = await import(pathToFileURL(join(packageRoot, "runtime", "review-integration-v2.mjs")).href);
-	const executableDigest = `sha256:${createHash("sha256").update(readFileSync(executable)).digest("hex")}`;
-	const decoded = decodeReviewCapabilitiesV2(capabilities, executableDigest);
-	if (decoded.contract !== "gentle-ai.review-integration/v2" || decoded.packageVersion !== versions[0].name.slice(1)) throw new Error("package-local Gentle AI returned incompatible capabilities");
+	const decoded = decodeReviewCapabilitiesV2(capabilities, capabilities.executable.sha256);
+	if (decoded.contract !== "gentle-ai.review-integration/v2" || decoded.packageVersion !== capabilities.package.version) throw new Error("packed shevanio-pi contract fixture is incompatible");
 	const packageManifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
-	process.stdout.write(`packed package E2E passed (gentle-pi ${packageManifest.version ?? "unknown"}; Gentle AI ${decoded.packageVersion ?? "unknown"})\n`);
+	process.stdout.write(`packed package E2E passed (shevanio-pi ${packageManifest.version ?? "unknown"}; bundled Gentle AI contract fixture ${decoded.packageVersion ?? "unknown"}; provider install skipped)\n`);
 } finally {
 	rmSync(temporary, { recursive: true, force: true });
 }

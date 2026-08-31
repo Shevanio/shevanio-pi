@@ -175,7 +175,7 @@ const contractHashes = {
   "contracts/review-integration/v2/schemas/repair.schema.json": "98a85fd45a8ae7f6211ffeeb3f9c478fa1dd1c17f385751f15f2111e6c3ab167",
   "contracts/review-integration/v2/schemas/start.schema.json": "2991e3fcca672d9257d61b6a336fb34e58b15a8e03f8a09a7adf892cae6a8085",
   "contracts/review-integration/v2/schemas/status.schema.json": "c4dcc736cfc6300560a3c4262d2d982368529d5c49d58d499552a3b0beef9212",
-  "docs/review-integration.md": "0a2a415e8bd24be61f5c6090bd0efccde0ed1b4561261be11bba197aa081f336",
+  "docs/review-integration.md": "f44e462e43417bd16162bda834ec3354a2e27b07e6657d28b4e60c905371deb3",
 };
 
 requiredPaths.push(...Object.keys(contractHashes));
@@ -295,7 +295,7 @@ async function main() {
   });
 
   if (missing.length > 0) {
-    console.error("gentle-pi package is missing required Pi resources:");
+    console.error("shevanio-pi package is missing required Pi resources:");
     for (const relativePath of missing) {
       console.error(`- ${relativePath}`);
     }
@@ -305,7 +305,7 @@ async function main() {
 
   const { unlistedOnDisk, listedButMissing } = reconcileContractsOnDisk(root, contractHashes);
   if (unlistedOnDisk.length > 0 || listedButMissing.length > 0) {
-    console.error("gentle-pi packaged contracts/ tree has drifted from contractHashes:");
+    console.error("shevanio-pi packaged contracts/ tree has drifted from contractHashes:");
     for (const relativePath of unlistedOnDisk) console.error(`- unlisted-on-disk: ${relativePath}`);
     for (const relativePath of listedButMissing) console.error(`- listed-but-missing: ${relativePath}`);
     console.error("\nRefusing to pack/publish an unreconciled contracts/ tree.");
@@ -315,7 +315,7 @@ async function main() {
   const generatedRuntimeSources = extractGeneratedRuntimeSources(root);
   const { drifted } = reconcileGeneratedRuntimeSources(root, generatedRuntimeSources, requiredPaths);
   if (drifted.length > 0) {
-    console.error("gentle-pi generated runtime sources, runtime/*.mjs, and requiredPaths have drifted apart:");
+    console.error("shevanio-pi generated runtime sources, runtime/*.mjs, and requiredPaths have drifted apart:");
     for (const entry of drifted) {
       const where = [];
       if (!entry.inSources) where.push("missing from generator sources");
@@ -333,7 +333,7 @@ async function main() {
   });
 
   if (driftedContracts.length > 0) {
-    console.error("gentle-pi packaged review-integration/v1 and review-integration/v2 contract bytes drifted from the byte-identical Gentle AI v2.4.0 contract:");
+    console.error("shevanio-pi packaged review-integration/v1 and review-integration/v2 contract bytes drifted from the byte-identical Gentle AI v2.4.0 contract:");
     for (const drift of driftedContracts) console.error(`- ${drift.relativePath}: expected ${drift.expected}, got ${drift.actual}`);
     process.exit(1);
   }
@@ -348,7 +348,7 @@ async function main() {
       .filter(([, digest]) => !/^[0-9a-f]{64}$/.test(digest))
       .map(([field]) => `${target}.${field}`));
   if (unpinnedDigests.length > 0) {
-    console.error("gentle-pi Gentle AI release digests are not pinned SHA-256 values:");
+    console.error("shevanio-pi Gentle AI release digests are not pinned SHA-256 values:");
     for (const entry of unpinnedDigests) console.error(`- ${entry}`);
     console.error("Refusing to pack/publish until scripts/gentle-ai-installer.mjs pins the published checksums.txt archive digests and extracted binary digests.");
     process.exit(1);
@@ -360,7 +360,7 @@ async function main() {
     env: { ...process.env, NODE_NO_WARNINGS: "1" },
   });
   if (generatedRuntimeCheck.status !== 0) {
-    console.error("gentle-pi generated runtime does not match its TypeScript sources:");
+    console.error("shevanio-pi generated runtime does not match its TypeScript sources:");
     console.error((generatedRuntimeCheck.stderr || generatedRuntimeCheck.stdout || "unknown generator failure").trim());
     process.exit(1);
   }
@@ -373,12 +373,12 @@ async function main() {
     libGentleAiVersion: GENTLE_AI_VERSION,
   });
   if (versionMismatches.length > 0) {
-    console.error("gentle-pi Gentle AI version pins have drifted from the authoritative INSTALLER_VERSION:");
+    console.error("shevanio-pi Gentle AI version pins have drifted from the authoritative INSTALLER_VERSION:");
     for (const mismatch of versionMismatches) console.error(`- ${mismatch}`);
     process.exit(1);
   }
 
-  console.log(`gentle-pi package resource check passed (${requiredPaths.length} files; ${Object.keys(contractHashes).length} exact byte-identical v2.4.0 contract artifacts).`);
+  console.log(`shevanio-pi package resource check passed (${requiredPaths.length} files; ${Object.keys(contractHashes).length} exact byte-identical v2.4.0 contract artifacts).`);
 }
 
 const isMainModule = process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
