@@ -914,7 +914,7 @@ function decodeLegacyReconcileAudit(value: unknown): NativeReviewRecoveryResult 
 }
 // Unimplemented next_transition.execute.operation values must never reach
 // argv synthesis. Checked against the raw pre-decode body so an operation
-// gentle-pi does not implement (e.g. a future `dispose-result`) fails with a
+// shevanio-pi does not implement (e.g. a future `dispose-result`) fails with a
 // named, typed refusal instead of a generic schema-incompatible error, and
 // before any client ever tries to build an invocation for it (Design
 // Decision #6, migrate-review-integration-v2).
@@ -926,7 +926,7 @@ function assertSupportedNextTransitionOperation(body: Record<string, unknown>): 
 	if (typeof execute !== "object" || execute === null || Array.isArray(execute)) return;
 	const operation = (execute as Record<string, unknown>).operation;
 	if (typeof operation === "string" && !NATIVE_REVIEW_SUPPORTED_TRANSITION_OPERATIONS.has(operation)) {
-		throw nativeError(NATIVE_REVIEW_ERROR_CODE.UNSUPPORTED_TRANSITION_OPERATION, NATIVE_REVIEW_OPERATION.STATUS, false, `unsupported-transition-operation: gentle-pi does not implement the next_transition operation "${operation}"; refusing rather than synthesizing an invocation for it`);
+		throw nativeError(NATIVE_REVIEW_ERROR_CODE.UNSUPPORTED_TRANSITION_OPERATION, NATIVE_REVIEW_OPERATION.STATUS, false, `unsupported-transition-operation: shevanio-pi does not implement the next_transition operation "${operation}"; refusing rather than synthesizing an invocation for it`);
 	}
 }
 function decode<T>(operation: NativeReviewOperation, mutating: boolean, callback: () => T, diagnostics = nativeProcessDiagnostics(operation, NATIVE_REVIEW_ERROR_CODE.SCHEMA_INCOMPATIBLE)): T {

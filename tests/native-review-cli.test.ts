@@ -271,7 +271,9 @@ test("negotiated STATUS rejects an unsupported provider execute operation before
 	const queue = queuedAdapter([{ stdout: JSON.stringify(status) }]);
 	await assert.rejects(
 		() => client(queue.adapter).targetStatus({ cwd: "/repo" }),
-		(error: unknown) => error instanceof NativeReviewCliError && error.code === NATIVE_REVIEW_ERROR_CODE.UNSUPPORTED_TRANSITION_OPERATION,
+		(error: unknown) => error instanceof NativeReviewCliError
+			&& error.code === NATIVE_REVIEW_ERROR_CODE.UNSUPPORTED_TRANSITION_OPERATION
+			&& error.message === `unsupported-transition-operation: shevanio-pi does not implement the next_transition operation "review.dispose-result"; refusing rather than synthesizing an invocation for it`,
 	);
 	assert.equal(queue.calls.length, 1);
 });
