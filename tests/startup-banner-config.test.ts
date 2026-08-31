@@ -164,7 +164,7 @@ test("installed Pi toggles inherited legacy banner config through a real Linux P
   const driver = `(sleep 2; printf '%s\\r' '/quit') | ${quote(script!)} -q -e -c ${quote(command)} /dev/null`;
   const result = spawnSync("/bin/sh", ["-c", driver], {
     cwd: f.cwd,
-    env: { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: f.home, USERPROFILE: f.home, SHELL: "/bin/sh", TERM: "xterm-256color", LANG: "C.UTF-8", COLUMNS: "80", LINES: "24", ...f.env },
+    env: { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: f.home, USERPROFILE: f.home, SHELL: "/bin/sh", TERM: "xterm-256color", LANG: "C.UTF-8", COLUMNS: "80", LINES: "24", PI_OFFLINE: "1", ...f.env },
     encoding: "utf8",
     timeout: 15_000,
     maxBuffer: 2 * 1024 * 1024,
