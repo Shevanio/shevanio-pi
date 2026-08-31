@@ -37,6 +37,8 @@ const {
 	loadBackgroundSubagentsPolicy,
 	resolveBackgroundSubagentsPolicy,
 	parseBackgroundSubagentsPolicyFile,
+	writeGlobalBackgroundSubagentsPolicy,
+	renderBackgroundSubagentsReport,
 	resolveBackgroundSubagentsCapability,
 	readActiveToolNames,
 	renderBackgroundSubagentsStatusLine,
@@ -56,11 +58,11 @@ after(() => {
 	for (const dir of scratchRoots) rmSync(dir, { recursive: true, force: true });
 });
 
-function writePolicyFile(dir: string, policy: string): void {
+function writePolicyFile(dir: string, policy: string, schema = "gentle-pi.background-subagents/v1"): void {
 	mkdirSync(dir, { recursive: true });
 	writeFileSync(
 		join(dir, "background-subagents.json"),
-		JSON.stringify({ schema: "gentle-pi.background-subagents/v1", policy }),
+		JSON.stringify({ schema, policy }),
 	);
 }
 
@@ -93,7 +95,8 @@ function installSubagentsPackage(
 // Strict decode
 // ---------------------------------------------------------------------------
 
-test("strict decode accepts exactly the v1 schema with policy on|off", () => {
+test("strict decode accepts exactly the canonical and legacy v1 schemas with policy on|off", () => {
+	assert.equal(parseBackgroundSubagentsPolicyFile('{"schema":"shevanio-pi.background-subagents/v1","policy":"on"}'), "on");
 	assert.equal(
 		parseBackgroundSubagentsPolicyFile(
 			'{"schema":"gentle-pi.background-subagents/v1","policy":"on"}',
@@ -115,6 +118,8 @@ test("strict decode rejects malformed shapes", () => {
 		"null",
 		'{"policy":"on"}',
 		'{"schema":"gentle-pi.background-subagents/v2","policy":"on"}',
+		'{"schema":"shevanio-pi.background-subagents/v2","policy":"on"}',
+		'{"schema":"other.background-subagents/v1","policy":"on"}',
 		'{"schema":"gentle-pi.background-subagents/v1","policy":"ON"}',
 		'{"schema":"gentle-pi.background-subagents/v1","policy":true}',
 		'{"schema":"gentle-pi.background-subagents/v1","policy":"on","extra":1}',
@@ -138,6 +143,49 @@ test("default is off with no file and no env", () => {
 		loadBackgroundSubagentsPolicy(cwd, { gentlePiConfigHome: configHome, env: EMPTY_ENV }),
 		"off",
 	);
+});
+
+test("resolution follows all six sources with scope outranking identity", () => {
+	const cwd = makeScratch("gp-bg-six-");
+	const canonicalHome = join(makeScratch("gp-bg-homes-"), "shevanio-pi");
+	const legacyHome = join(makeScratch("gp-bg-homes-"), "gentle-ai");
+	const canonicalProject = join(cwd, ".pi", "shevanio-pi");
+	const legacyProject = join(cwd, ".pi", "gentle-ai");
+	writePolicyFile(canonicalProject, "off", "shevanio-pi.background-subagents/v1");
+	writePolicyFile(legacyProject, "on");
+	writePolicyFile(canonicalHome, "off", "shevanio-pi.background-subagents/v1");
+	writePolicyFile(legacyHome, "on");
+	const env = { SHEVANIO_PI_BACKGROUND_SUBAGENTS: "off", GENTLE_PI_BACKGROUND_SUBAGENTS: "on" };
+	const options = { shevanioPiConfigHome: canonicalHome, gentlePiConfigHome: legacyHome, env };
+	for (const [source, directory, policy] of [
+		["canonical_project_file", canonicalProject, "off"], ["legacy_project_file", legacyProject, "on"],
+		["canonical_global_file", canonicalHome, "off"], ["legacy_global_file", legacyHome, "on"],
+	] as const) {
+		const resolution = resolveBackgroundSubagentsPolicy(cwd, options);
+		assert.deepEqual([resolution.source, resolution.policy], [source, policy]);
+		rmSync(join(directory, "background-subagents.json"));
+	}
+	assert.equal(resolveBackgroundSubagentsPolicy(cwd, options).source, "canonical_environment");
+	env.SHEVANIO_PI_BACKGROUND_SUBAGENTS = "invalid";
+	assert.equal(resolveBackgroundSubagentsPolicy(cwd, options).source, "legacy_environment");
+	env.GENTLE_PI_BACKGROUND_SUBAGENTS = "invalid";
+	assert.equal(resolveBackgroundSubagentsPolicy(cwd, options).source, "default");
+});
+
+test("same global home is read once without a manufactured collision", () => {
+	const cwd = makeScratch("gp-bg-same-home-");
+	const home = makeScratch("gp-bg-shared-home-");
+	writePolicyFile(home, "on");
+	const resolution = resolveBackgroundSubagentsPolicy(cwd, { shevanioPiConfigHome: home, gentlePiConfigHome: home, env: EMPTY_ENV });
+	assert.equal(resolution.source, "canonical_global_file");
+	assert.equal(resolution.shadowedSameScope, undefined);
+});
+
+test("canonical writes honor an explicitly supplied legacy selector", () => {
+	const home = makeScratch("gp-bg-write-selector-");
+	const path = writeGlobalBackgroundSubagentsPolicy("on", { env: { GENTLE_PI_CONFIG_HOME: home } });
+	assert.equal(path, join(home, "background-subagents.json"));
+	assert.equal(JSON.parse(readFileSync(path, "utf8")).schema, "shevanio-pi.background-subagents/v1");
 });
 
 test("project file overrides global file and env", () => {
@@ -203,6 +251,17 @@ test("a malformed higher-priority file fails closed to off instead of falling th
 		}),
 		"off",
 	);
+});
+
+test("a malformed canonical project file is authoritative over valid legacy sources", () => {
+	const cwd = makeScratch("gp-bg-canonical-mal-");
+	const canonicalHome = makeScratch("gp-bg-canonical-home-");
+	const legacyHome = makeScratch("gp-bg-legacy-home-");
+	mkdirSync(join(cwd, ".pi", "shevanio-pi"), { recursive: true });
+	writeFileSync(join(cwd, ".pi", "shevanio-pi", "background-subagents.json"), "{malformed");
+	writePolicyFile(join(cwd, ".pi", "gentle-ai"), "on");
+	const resolution = resolveBackgroundSubagentsPolicy(cwd, { shevanioPiConfigHome: canonicalHome, gentlePiConfigHome: legacyHome, env: { GENTLE_PI_BACKGROUND_SUBAGENTS: "on" } });
+	assert.deepEqual([resolution.policy, resolution.source, resolution.malformed], ["off", "canonical_project_file", true]);
 });
 
 // ---------------------------------------------------------------------------
@@ -387,16 +446,10 @@ test("the resolver attributes the project file, with its path", () => {
 		env: { GENTLE_PI_BACKGROUND_SUBAGENTS: "off" },
 	});
 	assert.equal(resolution.policy, "on");
-	assert.equal(resolution.source, "project_file");
-	assert.equal(
-		resolution.projectFile,
-		join(cwd, ".pi", "gentle-ai", "background-subagents.json"),
-	);
-	assert.equal(resolution.globalFile, join(configHome, "background-subagents.json"));
-	assert.equal(resolution.projectFileExists, true);
-	assert.equal(resolution.globalFileExists, true, "the shadowed global file is still reported");
+	assert.equal(resolution.source, "legacy_project_file");
+	assert.equal(resolution.decidingPath, join(cwd, ".pi", "gentle-ai", "background-subagents.json"));
 	assert.equal(resolution.malformed, false);
-	assert.equal(resolution.envValue, "off");
+	assert.equal(resolution.legacyEnvValue, "off");
 });
 
 test("the resolver attributes the global file when no project file exists", () => {
@@ -408,9 +461,7 @@ test("the resolver attributes the global file when no project file exists", () =
 		env: { GENTLE_PI_BACKGROUND_SUBAGENTS: "off" },
 	});
 	assert.equal(resolution.policy, "on");
-	assert.equal(resolution.source, "global_file");
-	assert.equal(resolution.projectFileExists, false);
-	assert.equal(resolution.globalFileExists, true);
+	assert.equal(resolution.source, "canonical_global_file");
 });
 
 test("the resolver attributes the environment variable when no file exists", () => {
@@ -421,8 +472,8 @@ test("the resolver attributes the environment variable when no file exists", () 
 		env: { GENTLE_PI_BACKGROUND_SUBAGENTS: "on" },
 	});
 	assert.equal(resolution.policy, "on");
-	assert.equal(resolution.source, "environment");
-	assert.equal(resolution.envValue, "on");
+	assert.equal(resolution.source, "legacy_environment");
+	assert.equal(resolution.legacyEnvValue, "on");
 });
 
 test("the resolver attributes the built-in default when nothing else decides", () => {
@@ -435,7 +486,7 @@ test("the resolver attributes the built-in default when nothing else decides", (
 	assert.equal(resolution.policy, "off");
 	assert.equal(resolution.source, "default");
 	assert.equal(
-		resolution.envValue,
+		resolution.legacyEnvValue,
 		"yes",
 		"an unrecognized env value is reported verbatim so the command can call it inert",
 	);
@@ -455,7 +506,7 @@ test("the resolver attributes a malformed file to that file and does not fall th
 	assert.equal(resolution.policy, "off", "a malformed file fails closed");
 	assert.equal(
 		resolution.source,
-		"project_file",
+		"legacy_project_file",
 		"the malformed file still decided; it did not fall through to the global file",
 	);
 	assert.equal(resolution.malformed, true);
@@ -554,7 +605,9 @@ async function runBackgroundSubagents(
 	env: Record<string, string | undefined> = {},
 ): Promise<{ message: string; type?: string }> {
 	scopedEnv(t, {
-		GENTLE_PI_CONFIG_HOME: configHome,
+		SHEVANIO_PI_CONFIG_HOME: configHome,
+		GENTLE_PI_CONFIG_HOME: join(configHome, "legacy-home"),
+		SHEVANIO_PI_BACKGROUND_SUBAGENTS: undefined,
 		GENTLE_PI_BACKGROUND_SUBAGENTS: undefined,
 		...env,
 	});
@@ -585,27 +638,27 @@ test("no argument reports the effective policy, the deciding default, and the ca
 		notice.message,
 		[
 			"background subagents: off (decided by built-in default; capability: absent)",
-			"Resolution order (first hit wins): project file, global file, GENTLE_PI_BACKGROUND_SUBAGENTS, built-in default off.",
+			"Resolution order: canonical project, legacy project, canonical global, legacy global, SHEVANIO_PI_BACKGROUND_SUBAGENTS, GENTLE_PI_BACKGROUND_SUBAGENTS, built-in off.",
 		].join("\n"),
 	);
 });
 
-test("status names the project file that decided and the global file it shadows", async (t) => {
+test("status diagnoses conflicting and equal same-scope project files", async (t) => {
 	const cwd = makeScratch("gp-bg-cmd-project-");
 	const configHome = join(makeScratch("gp-bg-home-"), "gentle-ai");
-	writePolicyFile(join(cwd, ".pi", "gentle-ai"), "on");
-	writePolicyFile(configHome, "off");
+	const canonicalFile = join(cwd, ".pi", "shevanio-pi", "background-subagents.json");
+	const legacyDir = join(cwd, ".pi", "gentle-ai");
+	writePolicyFile(join(cwd, ".pi", "shevanio-pi"), "on", "shevanio-pi.background-subagents/v1");
+	writePolicyFile(legacyDir, "off");
 	installSubagentsPackage(cwd, "pi-subagents-j0k3r");
 	const notice = await runBackgroundSubagents(t, "status", cwd, configHome);
-	assert.equal(notice.type, "info");
-	assert.equal(
-		notice.message,
-		[
-			`background subagents: on (decided by project file ${join(cwd, ".pi", "gentle-ai", "background-subagents.json")}; capability: ready)`,
-			`The global file ${join(configHome, "background-subagents.json")} exists but is outranked by that project file.`,
-			"Resolution order (first hit wins): project file, global file, GENTLE_PI_BACKGROUND_SUBAGENTS, built-in default off.",
-		].join("\n"),
-	);
+	assert.equal(notice.type, "warning");
+	assert.match(notice.message, new RegExp(`decided by canonical project file ${canonicalFile}`));
+	assert.match(notice.message, /Conflicting same-scope source legacy project file .* declares off/);
+	writePolicyFile(legacyDir, "on");
+	const equal = renderBackgroundSubagentsReport(resolveBackgroundSubagentsPolicy(cwd, { gentlePiConfigHome: configHome, env: EMPTY_ENV }), "ready");
+	assert.equal(equal.type, "info");
+	assert.match(equal.message, /legacy project file .* is shadowed at the same scope with the same on policy/);
 });
 
 test("status names the global file when it is the deciding source", async (t) => {
@@ -615,7 +668,7 @@ test("status names the global file when it is the deciding source", async (t) =>
 	const notice = await runBackgroundSubagents(t, "status", cwd, configHome);
 	assert.equal(
 		notice.message.split("\n")[0],
-		`background subagents: on (decided by global file ${join(configHome, "background-subagents.json")}; capability: absent)`,
+		`background subagents: on (decided by canonical global file ${join(configHome, "background-subagents.json")}; capability: absent)`,
 	);
 });
 
@@ -661,11 +714,11 @@ test("status reports a malformed deciding file as fail-closed, not as a real off
 	assert.equal(notice.type, "warning");
 	assert.equal(
 		notice.message.split("\n")[0],
-		`background subagents: off (decided by project file ${projectFile}; capability: absent)`,
+		`background subagents: off (decided by legacy project file ${projectFile}; capability: absent)`,
 	);
 	assert.ok(
 		notice.message.includes(
-			`${projectFile} is present but malformed, so the policy fails closed to off and no lower-priority source is consulted.`,
+			`${projectFile} is present but malformed, so the policy fails closed to off and no lower-priority source decides.`,
 		),
 		notice.message,
 	);
@@ -675,18 +728,23 @@ test("enable writes the global file and reports that it decides", async (t) => {
 	const cwd = makeScratch("gp-bg-cmd-enable-");
 	const configHome = join(makeScratch("gp-bg-home-"), "gentle-ai");
 	const globalFile = join(configHome, "background-subagents.json");
+	const legacyFile = join(configHome, "legacy-home", "background-subagents.json");
+	writePolicyFile(join(configHome, "legacy-home"), "on");
+	const legacyBytes = readFileSync(legacyFile, "utf8");
 	const notice = await runBackgroundSubagents(t, "enable", cwd, configHome);
-	assert.deepEqual(JSON.parse(readFileSync(globalFile, "utf8")), {
-		schema: "gentle-pi.background-subagents/v1",
-		policy: "on",
-	});
+	const canonicalBytes = '{\n  "schema": "shevanio-pi.background-subagents/v1",\n  "policy": "on"\n}\n';
+	assert.equal(readFileSync(globalFile, "utf8"), canonicalBytes);
+	writeGlobalBackgroundSubagentsPolicy("on");
+	assert.equal(readFileSync(globalFile, "utf8"), canonicalBytes, "repeat writes are byte-idempotent");
+	assert.equal(readFileSync(legacyFile, "utf8"), legacyBytes, "a distinct legacy file remains byte-identical");
 	assert.equal(notice.type, "info");
 	assert.equal(
 		notice.message,
 		[
-			`background subagents: on (decided by global file ${globalFile}; capability: absent)`,
-			`Wrote on to the global file ${globalFile}.`,
-			"Resolution order (first hit wins): project file, global file, GENTLE_PI_BACKGROUND_SUBAGENTS, built-in default off.",
+			`background subagents: on (decided by canonical global file ${globalFile}; capability: absent)`,
+			`Wrote on with canonical schema to ${globalFile}.`,
+			`legacy global file ${legacyFile} is shadowed at the same scope with the same on policy.`,
+			"Resolution order: canonical project, legacy project, canonical global, legacy global, SHEVANIO_PI_BACKGROUND_SUBAGENTS, GENTLE_PI_BACKGROUND_SUBAGENTS, built-in off.",
 		].join("\n"),
 	);
 });
@@ -698,13 +756,13 @@ test("disable writes the global file off and reports that it decides", async (t)
 	writePolicyFile(configHome, "on");
 	const notice = await runBackgroundSubagents(t, "disable", cwd, configHome);
 	assert.deepEqual(JSON.parse(readFileSync(globalFile, "utf8")), {
-		schema: "gentle-pi.background-subagents/v1",
+		schema: "shevanio-pi.background-subagents/v1",
 		policy: "off",
 	});
 	assert.equal(notice.type, "info");
 	assert.equal(
 		notice.message.split("\n")[0],
-		`background subagents: off (decided by global file ${globalFile}; capability: absent)`,
+		`background subagents: off (decided by canonical global file ${globalFile}; capability: absent)`,
 	);
 });
 
@@ -720,17 +778,17 @@ test("enable under an outranking project file writes the global file and says it
 	const notice = await runBackgroundSubagents(t, "enable", cwd, configHome);
 	assert.deepEqual(
 		JSON.parse(readFileSync(globalFile, "utf8")),
-		{ schema: "gentle-pi.background-subagents/v1", policy: "on" },
+		{ schema: "shevanio-pi.background-subagents/v1", policy: "on" },
 		"the requested global write still happens",
 	);
 	assert.equal(notice.type, "warning");
 	assert.equal(
 		notice.message,
 		[
-			`background subagents: off (decided by project file ${projectFile}; capability: absent)`,
-			`Wrote on to the global file ${globalFile}.`,
-			`That global write does not take effect here: the project file ${projectFile} outranks it. Edit or remove that project file to let the global setting decide.`,
-			"Resolution order (first hit wins): project file, global file, GENTLE_PI_BACKGROUND_SUBAGENTS, built-in default off.",
+			`background subagents: off (decided by legacy project file ${projectFile}; capability: absent)`,
+			`Wrote on with canonical schema to ${globalFile}.`,
+			`That global write does not take effect here: legacy project file ${projectFile} outranks ${globalFile}.`,
+			"Resolution order: canonical project, legacy project, canonical global, legacy global, SHEVANIO_PI_BACKGROUND_SUBAGENTS, GENTLE_PI_BACKGROUND_SUBAGENTS, built-in off.",
 		].join("\n"),
 	);
 });
@@ -744,13 +802,7 @@ test("enable with the environment variable set reports where that variable ranks
 	});
 	assert.equal(
 		notice.message.split("\n")[0],
-		`background subagents: on (decided by global file ${globalFile}; capability: absent)`,
-	);
-	assert.ok(
-		notice.message.includes(
-			"GENTLE_PI_BACKGROUND_SUBAGENTS=off is set, but both files outrank it and it outranks the built-in default; it decides only when neither file exists.",
-		),
-		notice.message,
+		`background subagents: on (decided by canonical global file ${globalFile}; capability: absent)`,
 	);
 });
 
