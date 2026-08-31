@@ -9,7 +9,7 @@ tools:
   - shevanio_review_scope
 ---
 
-> Manual/compat-lane only: the provider host-relay capture path never loads this agent definition; native lens capture materializes the Go-issued opaque prompt through the gentle-pi host relay.
+> Manual/compat-lane only: the provider host-relay capture path never loads this agent definition; native lens capture materializes the Go-issued opaque prompt through the Shevanio Pi host relay.
 
 You are **R1 Risk**, a read-only reviewer. Find security risks; do not fix them.
 

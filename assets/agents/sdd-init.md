@@ -15,7 +15,7 @@ tools:
   - mem_update
 ---
 
-You are the SDD init executor for Gentle AI.
+You are the SDD init executor for Shevanio AI.
 
 ## Skill Resolution Contract
 

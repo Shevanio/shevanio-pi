@@ -26,6 +26,15 @@ async function workspace(): Promise<string> {
 	return mkdtemp(join(tmpdir(), "gentle-pi-sdd-preflight-"));
 }
 
+function replaceExactly(source: string, current: string, previous: string): string {
+	assert.equal(source.split(current).length - 1, 1, `expected one ${JSON.stringify(current)}`);
+	return source.replace(current, previous);
+}
+
+function routingFrontmatter(source: string): string[] {
+	return source.match(/^(?:model|thinking):.*$/gm) ?? [];
+}
+
 const SAMPLE_PREFS: SddPreflightPreferences = {
 	executionMode: "auto",
 	artifactStore: "engram",
@@ -222,6 +231,69 @@ test("forced asset refresh migrates the exact v0.10.7 malformed sdd-apply asset 
 		else process.env.GENTLE_PI_AGENT_HOME = previousAgentHome;
 		rmSync(temporaryAgentHome, { recursive: true, force: true });
 		rmSync(temporaryUserAgentHome, { recursive: true, force: true });
+	}
+});
+
+test("forced refresh updates hash-owned identity assets and releases user-edited copies", () => {
+	const packageRoot = join(import.meta.dirname, "..");
+	const currentApply = readFileSync(join(packageRoot, "assets", "agents", "sdd-apply.md"), "utf8");
+	const currentSupport = readFileSync(join(packageRoot, "assets", "support", "sdd-status-contract.md"), "utf8");
+	const previousApply = replaceExactly(
+		replaceExactly(currentApply, "for Shevanio AI.", "for Gentle AI."),
+		"global Shevanio Pi strict-TDD support guidance",
+		"global Gentle AI strict-TDD support guidance",
+	);
+	const previousSupport = replaceExactly(
+		replaceExactly(currentSupport, "for Shevanio Pi SDD phases", "for Gentle Pi SDD phases"),
+		"use Shevanio Pi's local SDD status engine",
+		"use Gentle Pi's local SDD status engine",
+	);
+	const temporaryHome = mkdtempSync(join(tmpdir(), "shevanio-pi-identity-home-"));
+	const temporaryAgentHome = mkdtempSync(join(tmpdir(), "shevanio-pi-identity-agent-home-"));
+	const previousHome = process.env.HOME;
+	const previousAgentHome = process.env.GENTLE_PI_AGENT_HOME;
+	const installedApply = join(temporaryAgentHome, "agents", "sdd-apply.md");
+	const installedSupport = join(temporaryAgentHome, "gentle-ai", "support", "sdd-status-contract.md");
+	const manifestPath = join(temporaryAgentHome, "gentle-ai", "managed-assets.json");
+	try {
+		process.env.HOME = temporaryHome;
+		process.env.GENTLE_PI_AGENT_HOME = temporaryAgentHome;
+		mkdirSync(join(temporaryAgentHome, "agents"), { recursive: true });
+		mkdirSync(join(temporaryAgentHome, "gentle-ai", "support"), { recursive: true });
+		writeFileSync(installedApply, previousApply);
+		writeFileSync(installedSupport, previousSupport);
+		writeFileSync(manifestPath, JSON.stringify({ schemaVersion: 1, assets: {
+			"agents/sdd-apply.md": createHash("sha256").update(previousApply).digest("hex"),
+			"gentle-ai/support/sdd-status-contract.md": createHash("sha256").update(previousSupport).digest("hex"),
+		} }, null, 2));
+
+		installSddAssets(packageRoot, true);
+		assert.equal(readFileSync(installedApply, "utf8"), currentApply);
+		assert.equal(readFileSync(installedSupport, "utf8"), currentSupport);
+		assert.deepEqual(routingFrontmatter(readFileSync(installedApply, "utf8")), routingFrontmatter(currentApply), "package model/thinking frontmatter must not change during refresh");
+		let manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as { assets: Record<string, string> };
+		assert.equal(manifest.assets["agents/sdd-apply.md"], createHash("sha256").update(currentApply).digest("hex"));
+		assert.equal(manifest.assets["gentle-ai/support/sdd-status-contract.md"], createHash("sha256").update(currentSupport).digest("hex"));
+
+		const userApply = replaceExactly(
+			replaceExactly(currentApply, "description: Implement SDD tasks", "description: User-owned SDD tasks"),
+			"You are the SDD apply executor for Shevanio AI.",
+			"You are the user-owned SDD apply executor.",
+		);
+		const userSupport = `${currentSupport}\nUser-owned support policy.\n`;
+		writeFileSync(installedApply, userApply);
+		writeFileSync(installedSupport, userSupport);
+		installSddAssets(packageRoot, true);
+		assert.equal(readFileSync(installedApply, "utf8"), userApply);
+		assert.equal(readFileSync(installedSupport, "utf8"), userSupport);
+		manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as { assets: Record<string, string> };
+		assert.equal(manifest.assets["agents/sdd-apply.md"], undefined);
+		assert.equal(manifest.assets["gentle-ai/support/sdd-status-contract.md"], undefined);
+	} finally {
+		if (previousHome === undefined) delete process.env.HOME; else process.env.HOME = previousHome;
+		if (previousAgentHome === undefined) delete process.env.GENTLE_PI_AGENT_HOME; else process.env.GENTLE_PI_AGENT_HOME = previousAgentHome;
+		rmSync(temporaryHome, { recursive: true, force: true });
+		rmSync(temporaryAgentHome, { recursive: true, force: true });
 	}
 });
 

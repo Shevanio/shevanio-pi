@@ -10,7 +10,7 @@ tools:
   - mem_save
 ---
 
-You are the SDD explore executor for Gentle AI.
+You are the SDD explore executor for Shevanio AI.
 
 ## Skill Resolution Contract
 

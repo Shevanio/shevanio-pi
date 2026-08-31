@@ -178,6 +178,11 @@ function sha256(content) {
 	return createHash("sha256").update(content).digest("hex");
 }
 
+function replaceExactly(source, current, previous) {
+	assert.equal(source.split(current).length - 1, 1, `expected one ${JSON.stringify(current)}`);
+	return source.replace(current, previous);
+}
+
 function gitSync(cwd, ...arguments_) {
 	return execFileSync("git", arguments_, { cwd, encoding: "utf8" }).trim();
 }
@@ -1001,9 +1006,19 @@ async function run() {
 		const managedAssetsManifest = JSON.parse(
 			await readFile(managedAssetsManifestPath, "utf8"),
 		);
-		const previousManagedApply = "stale global apply\n";
+		const currentManagedApply = await readFile(join(ROOT, "assets", "agents", "sdd-apply.md"), "utf8");
+		const previousManagedApply = replaceExactly(
+			replaceExactly(currentManagedApply, "for Shevanio AI.", "for Gentle AI."),
+			"global Shevanio Pi strict-TDD support guidance",
+			"global Gentle AI strict-TDD support guidance",
+		);
 		const previousManagedChain = "stale global chain\n";
-		const previousManagedSupport = "stale global status contract\n";
+		const currentManagedSupport = await readFile(join(ROOT, "assets", "support", "sdd-status-contract.md"), "utf8");
+		const previousManagedSupport = replaceExactly(
+			replaceExactly(currentManagedSupport, "for Shevanio Pi SDD phases", "for Gentle Pi SDD phases"),
+			"use Shevanio Pi's local SDD status engine",
+			"use Gentle Pi's local SDD status engine",
+		);
 		await writeFile(join(globalAgentHome, "agents", "sdd-apply.md"), previousManagedApply);
 		managedAssetsManifest.assets["agents/sdd-apply.md"] = sha256(previousManagedApply);
 		const samePathUserRefuter = [
@@ -1036,6 +1051,7 @@ async function run() {
 			managedAssetsManifestPath,
 			JSON.stringify(managedAssetsManifest, null, 2),
 		);
+		await writeFile(globalModelsPath, JSON.stringify({ "sdd-apply": { model: "openai/gpt-5", thinking: "high" } }, null, 2));
 		await mkdir(join(noUiCwd, ".pi", "agents"), { recursive: true });
 		await writeFile(join(noUiCwd, ".pi", "agents", "sdd-apply.md"), "project override must stay\n");
 		const projectRefuterOverride = join(noUiCwd, ".pi", "agents", "review-refuter.md");
@@ -1043,11 +1059,10 @@ async function run() {
 		for (const handler of hooks.get("session_start")) {
 			await handler({ reason: "startup" }, createCtx(noUiCwd, false));
 		}
-		assert.notEqual(
-			await readFile(join(globalAgentHome, "agents", "sdd-apply.md"), "utf8"),
-			"stale global apply\n",
-			"session_start must refresh stale global SDD agents",
-		);
+		const refreshedManagedApply = await readFile(join(globalAgentHome, "agents", "sdd-apply.md"), "utf8");
+		assert.equal(refreshedManagedApply.replace(/^(?:model|thinking):.*\n/gm, ""), currentManagedApply, "session_start must refresh hash-owned SDD agents to canonical package bytes");
+		assert.match(refreshedManagedApply, /^model: openai\/gpt-5$/m, "session_start must reapply the saved model");
+		assert.match(refreshedManagedApply, /^thinking: high$/m, "session_start must reapply saved thinking");
 		assert.equal(
 			await readFile(installedRefuterPath, "utf8"),
 			samePathUserRefuter,
@@ -1058,10 +1073,10 @@ async function run() {
 			"stale global chain\n",
 			"session_start must refresh stale global SDD chains",
 		);
-		assert.notEqual(
+		assert.equal(
 			await readFile(join(globalAgentHome, "gentle-ai", "support", "sdd-status-contract.md"), "utf8"),
-			"stale global status contract\n",
-			"session_start must refresh stale global SDD support files",
+			currentManagedSupport,
+			"session_start must refresh hash-owned SDD support files to canonical package bytes",
 		);
 		assert.equal(
 			await readFile(join(noUiCwd, ".pi", "agents", "sdd-apply.md"), "utf8"),
@@ -1086,6 +1101,8 @@ async function run() {
 		const refreshedManagedAssets = JSON.parse(
 			await readFile(managedAssetsManifestPath, "utf8"),
 		);
+		assert.equal(refreshedManagedAssets.assets["agents/sdd-apply.md"], sha256(refreshedManagedApply));
+		assert.equal(refreshedManagedAssets.assets["gentle-ai/support/sdd-status-contract.md"], sha256(currentManagedSupport));
 		assert.equal(
 			refreshedManagedAssets.assets["agents/review-validator.md"],
 			undefined,

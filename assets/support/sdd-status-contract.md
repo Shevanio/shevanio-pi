@@ -1,6 +1,6 @@
 # SDD Status and Action Context Contract
 
-Shared OpenSpec-style contract for Gentle Pi SDD phases. Use this before acting on a change so orchestration and executors do not guess state, paths, or edit scope.
+Shared OpenSpec-style contract for Shevanio Pi SDD phases. Use this before acting on a change so orchestration and executors do not guess state, paths, or edit scope.
 
 ## Purpose
 
@@ -15,7 +15,7 @@ Any phase that selects, continues, applies, verifies, syncs, or archives an SDD 
 
 ## Native Engine
 
-- For file-backed `openspec` or `both` sessions with an `openspec/` directory, use Gentle Pi's local SDD status engine as the artifact-state authority. It resolves the local artifact graph without consulting RDD authority or receipts.
+- For file-backed `openspec` or `both` sessions with an `openspec/` directory, use Shevanio Pi's local SDD status engine as the artifact-state authority. It resolves the local artifact graph without consulting RDD authority or receipts.
 - For non-authoritative stores (`engram`, `none`, and `both` without an `openspec/` directory), do not treat disk status output as authoritative; follow Engine Authority by Store below.
 - Runtime-attempt authority is different from artifact dispatch: normal runtime-bearing OpenSpec and Engram continuations MUST bracket external execution with `gentle-ai sdd-attempt acquire|settle --cwd <repo> --change <change>`. Their bounded result contains only `proceed`, `blocked`, or `complete` plus an opaque continuation token when required, and MAY carry `settle_obligation` on a `proceed`. The Git-common-dir immutable chain remains the sole authority for ordinals, cumulative attempt/line budgets, runtime evidence, and atomic bound remediation.
 - A phase actor launched BY a parent that already holds a `proceed`-state acquire for that exact work unit is a distinct call/process, not a fresh continuation: it MUST NOT `acquire` again blind. Colliding with its own parent's active attempt is not a genuine `blocked: active_attempt` (#2291). It authenticates as that SAME attempt by passing the parent's returned token on its own `acquire --token <token>` call: a token matching the ledger's live active attempt returns `proceed` with that same token and zero mutation, while a non-matching token gets the ordinary `blocked: active_attempt` naming the real active token.

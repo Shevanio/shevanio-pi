@@ -56,6 +56,12 @@ const V014_MANAGED_ASSETS = join(
 // Pi-authored adversarial review verdict.
 const MANAGED_EXEMPLAR_TOOLS = ["read", "grep", "find", "codegraph"];
 const RETIRED_ADVERSARIAL_AGENTS = ["review-refuter.md", "review-validator.md"];
+const IDENTITY_MANAGED_AGENT_FILES = [
+	"gentle-ai-explore.md", "gentle-ai-verify.md", "gentle-ai-worker.md",
+	"jd-fix-agent.md", "jd-judge-a.md", "jd-judge-b.md",
+	"review-readability.md", "review-reliability.md", "review-resilience.md", "review-risk.md",
+	...(["apply", "archive", "design", "explore", "init", "onboard", "proposal", "research", "spec", "status", "sync", "tasks", "verify"].map((phase) => `sdd-${phase}.md`)),
+];
 
 interface ManagedAssetsManifest {
 	schemaVersion: number;
@@ -454,6 +460,18 @@ test("packaged agents use YAML list syntax for tool allowlists", () => {
 			`${file} must declare tools as a YAML list`,
 		);
 	}
+});
+
+test("managed identity assets remain packed with frozen agent identifiers", () => {
+	const packageJson = readPackageJson();
+	const verifier = readFileSync(join(PACKAGE_ROOT, "scripts", "verify-package-files.mjs"), "utf8");
+	assert.ok(packageJson.files?.includes("assets/"), "the published package must include managed assets");
+	for (const file of IDENTITY_MANAGED_AGENT_FILES) {
+		const relativePath = `assets/agents/${file}`;
+		assert.ok(verifier.includes(`"${relativePath}"`), `${relativePath} must remain package-verified`);
+		assert.equal(readAgentDefinition(join(PACKAGE_ROOT, relativePath)).name, file.slice(0, -3));
+	}
+	assert.ok(verifier.includes('"assets/support/sdd-status-contract.md"'));
 });
 
 // The Pi child-session tool registry exposes `find` for filesystem discovery
