@@ -125,8 +125,8 @@ try {
 	const reviewTools = registeredToolNames.filter((name) => name.startsWith("shevanio_review")).sort();
 	if (JSON.stringify(reviewTools) !== JSON.stringify(["shevanio_review", "shevanio_review_capture", "shevanio_review_scope"])) throw new Error(`packed review tool identities changed: ${reviewTools.join(", ")}`);
 	for (const name of ["gentle_review", "gentle_review_capture", "gentle_review_scope"]) if (registeredToolNames.includes(name)) throw new Error(`packed legacy review tool must not be registered: ${name}`);
-	const choices = [], pickers = [];
-	runner.setUIContext({ ...runner.getUIContext(), notify() {}, async select(label, options) { pickers.push({ label, options }); return choices.shift() ?? options[0]; } });
+	const choices = [], pickers = [], notices = [];
+	runner.setUIContext({ ...runner.getUIContext(), notify(message, type = "info") { notices.push({ message, type }); }, async select(label, options) { pickers.push({ label, options }); return choices.shift() ?? options[0]; }, async input(_label, placeholder) { return placeholder; } });
 	const canonicalGlobalPersona = join(process.env.SHEVANIO_PI_CONFIG_HOME, "persona.json"), legacyGlobalPersona = join(process.env.GENTLE_PI_CONFIG_HOME, "persona.json");
 	const canonicalProjectPersona = join(runtimeCwd, ".pi", "shevanio-pi", "persona.json"), legacyProjectPersona = join(runtimeCwd, ".pi", "gentle-ai", "persona.json");
 	const legacyGlobalBytes = '{"mode":"neutral","preserve":true}\n', legacyProjectBytes = '{"mode":"gentleman","preserve":true}\n';
@@ -138,6 +138,10 @@ try {
 	choices.push("neutral"); await session.prompt("/shevanio-pi:persona project");
 	const packedPrompt = await runner.emitBeforeAgentStart("packed persona", undefined, "BASE", {});
 	if (!/"mode": "neutral"/.test(readFileSync(canonicalProjectPersona, "utf8")) || readFileSync(legacyProjectPersona, "utf8") !== legacyProjectBytes || !/Current persona mode: neutral/.test(packedPrompt.systemPrompt)) throw new Error("packed project persona precedence failed");
+	const canonicalPreflight = join(runtimeCwd, ".pi", "shevanio-pi", "sdd-preflight.json"), legacyPreflight = join(runtimeCwd, ".pi", "gentle-ai", "sdd-preflight.json"), legacyPreflightBytes = '{"executionMode":"auto","artifactStore":"openspec","chainedPrStrategy":"ask-on-risk","reviewBudgetLines":400,"engramAvailable":false,"prompted":false,"preserve":true}\n';
+	writeFileSync(legacyPreflight, legacyPreflightBytes); choices.push("interactive", "auto-chain"); notices.length = 0; await session.prompt("/shevanio-pi:sdd-preflight");
+	if (readFileSync(canonicalPreflight, "utf8") !== '{\n  "schema": "shevanio-pi.sdd-preflight/v1",\n  "executionMode": "interactive",\n  "artifactStore": "openspec",\n  "chainedPrStrategy": "auto-chain",\n  "reviewBudgetLines": 400\n}\n' || readFileSync(legacyPreflight, "utf8") !== legacyPreflightBytes) throw new Error("packed canonical/legacy preflight authority failed");
+	if (!notices.some(({ message }) => message.includes(`Preference source: canonical-project (${canonicalPreflight})`) && message.includes(legacyPreflight))) throw new Error("packed preflight diagnostics do not name both project sources");
 	const alwaysOnAsset = readFileSync(join(packageRoot, "assets", "orchestrator.md"), "utf8");
 	const lazyWorkflowAsset = readFileSync(join(packageRoot, "assets", "sdd-orchestrator-workflow.md"), "utf8");
 	const compatibilitySkill = readFileSync(join(packageRoot, "skills", "gentle-ai", "SKILL.md"), "utf8");

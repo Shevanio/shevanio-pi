@@ -379,10 +379,12 @@ async function run() {
 	const runtimeCwd = await tempWorkspace();
 	const runtimeAgentDir = await tempWorkspace();
 	try {
-		const loader = new DefaultResourceLoader({ cwd: runtimeCwd, agentDir: runtimeAgentDir, additionalExtensionPaths: EXTENSIONS.map((path) => join(ROOT, path)), noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true });
+		const memoryCapability = join(runtimeCwd, "memory-capability.mjs"); await writeFile(memoryCapability, 'export default (pi) => pi.registerTool({ name: "mem_save", label: "Memory", description: "Test session memory capability", parameters: { type: "object", properties: {} }, async execute() { return { content: [] }; } });\n');
+		const loader = new DefaultResourceLoader({ cwd: runtimeCwd, agentDir: runtimeAgentDir, additionalExtensionPaths: [...EXTENSIONS.map((path) => join(ROOT, path)), memoryCapability], noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true });
 		await loader.reload();
 		assert.deepEqual(loader.getExtensions().errors, [], "Pi's resource loader must load every package extension");
 		const { session } = await createAgentSession({ cwd: runtimeCwd, agentDir: runtimeAgentDir, resourceLoader: loader, sessionManager: SessionManager.inMemory(runtimeCwd), noTools: "builtin" });
+		session.setActiveToolsByName(["mem_save"]);
 		const runner = session.extensionRunner;
 		const registered = runner.getRegisteredCommands();
 		for (const name of EXPECTED_COMMANDS) {
@@ -399,7 +401,7 @@ async function run() {
 		for (const name of ["gentle_review", "gentle_review_capture", "gentle_review_scope"]) assert.equal(registeredToolNames.includes(name), false, `legacy runtime review tool should not be registered: ${name}`);
 			const routed = [];
 			const personaSelections = [], personaPickers = [];
-			runner.setUIContext({ ...runner.getUIContext(), notify(message, type = "info") { routed.push({ message, type }); }, async select(label, options) { personaPickers.push({ label, options }); return personaSelections.shift() ?? options[0]; } });
+			runner.setUIContext({ ...runner.getUIContext(), notify(message, type = "info") { routed.push({ message, type }); }, async select(label, options) { personaPickers.push({ label, options }); return personaSelections.shift() ?? options[0]; }, async input(_label, placeholder) { return placeholder; } });
 			const canonicalPersonaGlobalPath = join(canonicalConfigHome, "persona.json"), legacyPersonaGlobalPath = join(globalConfigHome, "persona.json");
 			const canonicalPersonaProjectPath = join(runtimeCwd, ".pi", "shevanio-pi", "persona.json"), legacyPersonaProjectPath = join(runtimeCwd, ".pi", "gentle-ai", "persona.json");
 			const legacyPersonaGlobalBytes = '{"mode":"neutral","user":"preserve-global"}\n', legacyPersonaProjectBytes = '{"mode":"gentleman","user":"preserve-project"}\n';
@@ -416,6 +418,10 @@ async function run() {
 			assert.match(await readFile(canonicalPersonaProjectPath, "utf8"), /"mode": "neutral"/); assert.equal(await readFile(legacyPersonaProjectPath, "utf8"), legacyPersonaProjectBytes);
 			const personaStart = await runner.emitBeforeAgentStart("runtime persona", undefined, "BASE", {});
 			assert.match(personaStart.systemPrompt, /Current persona mode: neutral/, "canonical project persona must outrank all global sources");
+			const canonicalPreflightPath = join(runtimeCwd, ".pi", "shevanio-pi", "sdd-preflight.json"), legacyPreflightPath = join(runtimeCwd, ".pi", "gentle-ai", "sdd-preflight.json"), legacyPreflightBytes = '{"executionMode":"auto","artifactStore":"openspec","chainedPrStrategy":"ask-on-risk","reviewBudgetLines":400,"engramAvailable":false,"prompted":false,"preserve":"legacy"}\n';
+			await writeFile(legacyPreflightPath, legacyPreflightBytes); personaSelections.push("interactive", "engram", "auto-chain"); routed.length = 0; await session.prompt("/shevanio-pi:sdd-preflight");
+			assert.equal(await readFile(canonicalPreflightPath, "utf8"), '{\n  "schema": "shevanio-pi.sdd-preflight/v1",\n  "executionMode": "interactive",\n  "artifactStore": "engram",\n  "chainedPrStrategy": "auto-chain",\n  "reviewBudgetLines": 400\n}\n'); assert.equal(await readFile(legacyPreflightPath, "utf8"), legacyPreflightBytes);
+			assert.ok(routed.some(({ message }) => message.includes(`Preference source: canonical-project (${canonicalPreflightPath})`) && message.includes(legacyPreflightPath))); const sddStart = await runner.emitBeforeAgentStart("runtime sdd", "sdd-apply", "BASE", {}); assert.match(sddStart.systemPrompt, /Artifact store: engram/);
 			const canonicalPolicyPath = join(canonicalConfigHome, "background-subagents.json");
 		const legacyPolicyPath = join(globalConfigHome, "background-subagents.json");
 		await session.prompt("/shevanio-pi:background-subagents enable");
@@ -1188,7 +1194,7 @@ async function run() {
 		assert.equal(existsSync(join(globalAgentHome, "chains", "sdd-full.chain.md")), true);
 		assert.equal(ctx.ui.selections.length, 0, "automatic SDD triggers must not render confirmation-only selectors");
 		assert.ok(ctx.ui.notifications.at(-1).message.startsWith("Shevanio Pi SDD preflight complete.\n"));
-		assert.match(ctx.ui.notifications.at(-1).message, /Preference source: canonical default or persisted preference/);
+		assert.match(ctx.ui.notifications.at(-1).message, /Preference source: canonical-project/);
 		assert.deepEqual(
 			await inputHook({ text: "please use sdd for this change", source: "interactive" }, ctx),
 			{ action: "continue" },
@@ -1235,7 +1241,7 @@ async function run() {
 			);
 		}
 		assert.equal(ctx.ui.selections.length, 0, "automatic SDD routing must not render confirmation-only selectors");
-		assert.match(ctx.ui.notifications.at(-1).message, /Preference source: canonical default or persisted preference/);
+		assert.match(ctx.ui.notifications.at(-1).message, /Preference source: canonical-project/);
 		await commands.get("gentle:status").handler("", ctx);
 		assert.match(ctx.ui.notifications.at(-1).message, /Global SDD assets stale: 0 file\(s\)/);
 		assert.doesNotMatch(ctx.ui.notifications.at(-1).message, /install-sdd --force/);
@@ -1284,7 +1290,7 @@ async function run() {
 		assert.equal(existsSync(join(globalAgentHome, "agents", "sdd-apply.md")), true);
 		assert.equal(ctx.ui.selections.length, 2, "explicit preflight prompts intentional choice fields");
 		assert.equal(ctx.ui.selections.some(({ label }) => label === "SDD artifact store"), false, "one-option artifact store must be elided");
-		assert.match(ctx.ui.notifications.at(-1).message, /Preference source: explicit session choice/);
+		assert.match(ctx.ui.notifications.at(-1).message, /Preference source: canonical-project/);
 		await commands.get("gentle:sdd-preflight").handler("", ctx);
 		assert.equal(ctx.ui.selections.length, 4, "explicit preflight remains an intentional re-prompt");
 	} finally {

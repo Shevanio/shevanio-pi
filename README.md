@@ -373,9 +373,23 @@ Engram-only mode is different by design: Engram is working memory and does not m
 ~/.pi/agent/gentle-ai/support/strict-tdd*.md
 ```
 
-Preflight values resolve in this order: explicit current user/session choice, valid persisted preference, capability or already-selected strategy constraint, canonical default, then a prompt only when genuinely unresolved. Resolved values are reused for later SDD flows in the session.
+The sole canonical preference authority is `<cwd>/.pi/shevanio-pi/sdd-preflight.json`. `<cwd>/.pi/gentle-ai/sdd-preflight.json` is a read-only compatibility fallback; there is no global preference scope or config-home selector. Resolution is canonical project file, then legacy project file, then built-in defaults. Canonical presence wins even when unreadable or malformed: safe durable defaults are used with a warning, without falling through to legacy or rewriting either file. Equal normalized canonical/legacy choices produce an informational diagnostic; conflicts warn and retain canonical authority. Diagnostics name their source paths.
 
-Canonical values are `auto` execution mode, `openspec` artifact store, `ask-on-risk` delivery strategy, and a `400` changed-line review threshold. The delivery strategy domain is `ask-on-risk`, `auto-chain`, `single-pr`, or `exception-ok`; `chain_strategy` remains deferred until chaining is selected. `exception-ok` requires explicit `size:exception` acceptance and is never inferred. Consent, authorization, security, destructive/publishing, interactive phase approval, and ambiguous-scope gates remain human-controlled.
+The canonical document has exactly this versioned shape:
+
+```json
+{
+  "schema": "shevanio-pi.sdd-preflight/v1",
+  "executionMode": "auto",
+  "artifactStore": "openspec",
+  "chainedPrStrategy": "ask-on-risk",
+  "reviewBudgetLines": 400
+}
+```
+
+Only those four choices are durable. `engramAvailable` is detected again for each Pi session; prompt and size-exception state remain in memory. Legacy accepts its established unversioned six-field shape and aliases, plus canonical v1 at the legacy path. Reads and status never write, move, delete, copy, or migrate preferences. Automatic ensure creates canonical v1 only when neither authority exists; any present authority is left byte-exact. Explicit `/shevanio-pi:sdd-preflight` writes only canonical v1 after a selection, leaves legacy bytes untouched, and resolves the resulting authority before reporting it. Exact canonical bytes are a no-op that preserves mtime; write failures are nonfatal and reported.
+
+Resolved preferences are cached by the resolved canonical project path plus the Pi session file/ID (or an isolated fallback), with concurrent ensure calls deduplicated. External edits do not change an already ensured session; an explicit preflight or a new session re-resolves. Canonical defaults remain `auto`, `openspec`, `ask-on-risk`, and `400`. The delivery strategy domain is `ask-on-risk`, `auto-chain`, `single-pr`, or ephemeral `exception-ok`; `chain_strategy` remains deferred until chaining is selected. `exception-ok` requires explicit `size:exception` acceptance and is never inferred. Consent, authorization, security, destructive/publishing, interactive phase approval, and ambiguous-scope gates remain human-controlled.
 
 It does **not** overwrite existing global assets unless you explicitly run:
 
