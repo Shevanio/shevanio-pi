@@ -134,10 +134,10 @@ function reviewToolsForNative(nativeReviewCli: NativeReviewCli): RegisteredRevie
 		registerTool(definition: RegisteredTool & { name: string }) { tools.set(definition.name, definition); },
 		registerCommand() {},
 	} as unknown as ExtensionAPI);
-	const controller = tools.get("gentle_review");
-	const capture = tools.get("gentle_review_capture");
-	assert.ok(controller, "gentle_review controller must be registered");
-	assert.ok(capture, "gentle_review_capture must be registered");
+	const controller = tools.get("shevanio_review");
+	const capture = tools.get("shevanio_review_capture");
+	assert.ok(controller, "shevanio_review controller must be registered");
+	assert.ok(capture, "shevanio_review_capture must be registered");
 	return { controller: controller!, capture: capture! };
 }
 

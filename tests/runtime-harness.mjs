@@ -294,8 +294,8 @@ async function run() {
 		const lastEventPi = createPi();
 		const { createGentleAiExtension } = await import(pathToFileURL(join(ROOT, "extensions/gentle-ai.ts")).href);
 		createGentleAiExtension({ nativeReviewCli })(lastEventPi.pi);
-		const controller = lastEventPi.tools.get("gentle_review");
-		const capture = lastEventPi.tools.get("gentle_review_capture");
+		const controller = lastEventPi.tools.get("shevanio_review");
+		const capture = lastEventPi.tools.get("shevanio_review_capture");
 		assert.ok(controller, "runtime must register the public status controller");
 		assert.ok(capture, "runtime must register the one-slot capture tool");
 		assert.equal(controller.parameters.properties.operation.enum.includes("finalize"), false);
@@ -345,10 +345,11 @@ async function run() {
 	for (const toolName of ["read", "bash", "grep", "find", "ls", "edit", "write"]) {
 		assert.ok(tools.has(toolName), `missing quiet built-in tool renderer ${toolName}`);
 	}
-	assert.ok(tools.has("gentle_review"), "missing registered bounded review controller tool");
-	assert.ok(tools.has("gentle_review_scope"), "missing registered bounded review scope tool");
+	assert.ok(tools.has("shevanio_review"), "missing registered bounded review controller tool");
+	assert.ok(tools.has("shevanio_review_scope"), "missing registered bounded review scope tool");
+	for (const name of ["gentle_review", "gentle_review_capture", "gentle_review_scope"]) assert.equal(tools.has(name), false, `legacy review tool should not be registered: ${name}`);
 	assert.deepEqual(
-		tools.get("gentle_review").parameters.properties.operation.enum.filter((operation) => operation.includes("supersession") || operation === "supersede" || operation === "reconcile-authority"),
+		tools.get("shevanio_review").parameters.properties.operation.enum.filter((operation) => operation.includes("supersession") || operation === "supersede" || operation === "reconcile-authority"),
 		["reconcile-authority"],
 		"runtime controller must expose only native authority reconciliation",
 	);
@@ -379,7 +380,9 @@ async function run() {
 		}
 		assert.equal(registered.some(({ invocationName }) => /:(?:1|2)$/.test(invocationName)), false);
 		for (const suffix of COMMAND_SUFFIXES) assert.ok(runner.getCommand(`gentle:${suffix}`).description.startsWith(deprecatedAliasNotice(suffix)));
-		assert.deepEqual(runner.getAllRegisteredTools().map(({ definition }) => definition.name).filter((name) => name.startsWith("gentle_review")).sort(), ["gentle_review", "gentle_review_capture", "gentle_review_scope"]);
+		const registeredToolNames = runner.getAllRegisteredTools().map(({ definition }) => definition.name);
+		assert.deepEqual(registeredToolNames.filter((name) => name.startsWith("shevanio_review")).sort(), ["shevanio_review", "shevanio_review_capture", "shevanio_review_scope"]);
+		for (const name of ["gentle_review", "gentle_review_capture", "gentle_review_scope"]) assert.equal(registeredToolNames.includes(name), false, `legacy runtime review tool should not be registered: ${name}`);
 		const routed = [];
 		runner.setUIContext({ ...runner.getUIContext(), notify(message, type = "info") { routed.push({ message, type }); } });
 		await session.prompt("/shevanio-pi:status");

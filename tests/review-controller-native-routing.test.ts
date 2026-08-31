@@ -514,8 +514,8 @@ function reviewRuntime(nativeReviewCli: NativeReviewCli, candidateViews: Candida
 		registerTool(definition: RegisteredControllerTool & { name: string }) { tools.set(definition.name, definition); },
 		registerCommand() {},
 	} as unknown as ExtensionAPI);
-	const controller = tools.get("gentle_review");
-	const capture = tools.get("gentle_review_capture");
+	const controller = tools.get("shevanio_review");
+	const capture = tools.get("shevanio_review_capture");
 	assert.ok(controller);
 	assert.ok(capture);
 	assert.ok(toolCall);

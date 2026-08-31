@@ -17,7 +17,7 @@ import type { ReviewCollectInputV3, ReviewStatusV3 } from "../lib/review-integra
 //      dispatch refused with `no current controller-owned candidate view
 //      lineage binding` even though the controller itself had just decoded
 //      the successor's authoritative STATUS.
-//   B. `gentle_review finalize` on a lineage still at reviewer_results_required
+//   B. `shevanio_review finalize` on a lineage still at reviewer_results_required
 //      misrouted into the correction evidence-first-ordering lane and failed
 //      instead of surfacing the provider-offered review.capture-result step.
 

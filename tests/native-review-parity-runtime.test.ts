@@ -138,7 +138,7 @@ test("generated runtime decoder consumes the captured terminal closure directly"
 	assert.equal(runtime.state, "approved");
 });
 
-test("registered gentle_review surfaces the package-pinned Pi transport refusal before native START for a safe internal symlink candidate", async (t) => {
+test("registered shevanio_review surfaces the package-pinned Pi transport refusal before native START for a safe internal symlink candidate", async (t) => {
 	await reviewEnabledHome(t);
 	const workspace = await mkdtemp(join(tmpdir(), "gentle-pi-v215-symlink-candidate-"));
 	const repository = join(workspace, "repository");
@@ -183,7 +183,7 @@ test("registered gentle_review surfaces the package-pinned Pi transport refusal 
 		registerTool(definition: RegisteredController & { name: string }) { tools.set(definition.name, definition); },
 		registerCommand() {},
 	} as unknown as ExtensionAPI);
-	const controller = tools.get("gentle_review");
+	const controller = tools.get("shevanio_review");
 	assert.ok(controller);
 
 	let returned: { details?: unknown } | undefined;
