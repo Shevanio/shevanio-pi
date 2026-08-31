@@ -130,6 +130,8 @@ test("package verification names the native review runtime boundary and packaged
 	assert.ok(manifest.files?.includes("runtime/"), "the published package must include generated JavaScript runtime modules");
 	assert.match(verifier, /"lib\/native-review-cli\.ts"/, "package verification must require the native review adapter from the packaged runtime");
 	assert.match(verifier, /"runtime\/native-review-cli\.mjs"/, "package verification must require the generated native review adapter");
+	assert.match(verifier, /"lib\/command-alias\.ts"/, "package verification must require the canonical command helper");
+	assert.match(verifier, /"extensions\/startup-banner\.ts"/, "package verification must require the startup banner");
 	assert.match(verifier, /build-runtime-modules\.mjs.*--check/s, "package verification must reject generated-runtime drift");
 	assert.match(verifier, /"tests\/fixtures\/native-review-cli\/v2\.1\.3\/start\.json"/, "package verification must retain the pinned native decoder fixture");
 	assert.match(
@@ -226,9 +228,16 @@ test("generated runtime modules and packed-package checks are deterministic", ()
 	assert.match(packedRunner, /could not resolve npm-cli\.js without a command shell/);
 	assert.doesNotMatch(packedRunner, /ComSpec|cmd\.exe/);
 	assert.match(packedRunner, /node_modules", "shevanio-pi"/);
+	assert.match(packedRunner, /DefaultResourceLoader/);
 	assert.match(packedRunner, /GENTLE_PI_SKIP_GENTLE_AI_INSTALL: "1"/);
 	assert.doesNotMatch(packedRunner, /execFileSync\(executable/);
 	assert.doesNotMatch(packedRunner, /git-commit-transaction|transaction runner/i);
+	const commandHelper = readFileSync(join(PACKAGE_ROOT, "lib", "command-alias.ts"), "utf8");
+	const banner = readFileSync(join(PACKAGE_ROOT, "extensions", "startup-banner.ts"), "utf8");
+	assert.match(commandHelper, /shevanio-pi:/);
+	assert.match(commandHelper, /gentle:/);
+	assert.match(banner, /SHEVANIO PI/);
+	assert.doesNotMatch(banner, /GENTLE-PI/);
 });
 
 test("package manifest ships and runs the checked-in package-local Gentle AI installer", () => {

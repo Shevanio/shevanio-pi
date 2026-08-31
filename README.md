@@ -15,7 +15,9 @@ The canonical repository and product owner is [Shevanio/shevanio-pi](https://git
 
 > **Publication status:** `shevanio-pi` is not yet available from npm. Canonical npm installation commands will be documented only after publication is independently verified.
 
-> **Transitional compatibility identifiers:** Existing runtime surfaces still expose `/gentle:*`, `GENTLE_PI_*`, `.pi/gentle-ai`, `.gentle-ai/`, `gentle-ai` installer/binary names, and `gentle-pi.*` schema names. These identifiers remain for compatibility; they are not canonical package or repository coordinates.
+> **Transitional compatibility identifiers:** `GENTLE_PI_*`, `.pi/gentle-ai`, `.gentle-ai/`, `gentle-ai` installer/binary names, and `gentle-pi.*` schema names remain compatibility surfaces; they are not canonical package or repository coordinates.
+>
+> **Deprecated command aliases:** `/gentle:background-subagents`, `/gentle:banner`, `/gentle:banner-color`, `/gentle:dev-binary`, `/gentle:doctor`, `/gentle:install-sdd`, `/gentle:models`, `/gentle:persona`, `/gentle:review-mode`, `/gentle:sdd-preflight`, `/gentle:status`, `/gentle:toggle-rose`, and `/gentle:toggle-text-logo` map suffix-for-suffix to `/shevanio-pi:*`. They remain visible through all `2.x` releases, warn on every invocation, and are removed together in `shevanio-pi` 3.0.0. No other alias namespace is supported.
 
 ## The problem
 
@@ -81,27 +83,27 @@ pi
 ## Quick start
 
 ```text
-/gentle:status          Check package, SDD assets, OpenSpec, and global model config.
-/gentle:doctor          Run read-only diagnostics for SDD assets, config, tools, and guards.
-/gentle:sdd-preflight   Run or reuse the session SDD preflight explicitly.
+/shevanio-pi:status          Check package, SDD assets, OpenSpec, and global model config.
+/shevanio-pi:doctor          Run read-only diagnostics for SDD assets, config, tools, and guards.
+/shevanio-pi:sdd-preflight   Run or reuse the session SDD preflight explicitly.
 /sdd-init                  Create or refresh openspec/config.yaml (openspec/both stores only).
-/gentle:models             Assign global model/effort routing to SDD/custom agents.
-/gentle:persona            Switch between gentleman and neutral persona modes.
-/gentle:background-subagents  Show or set the managed background-subagents policy, with its deciding source.
-/gentle:banner             Configure startup rose, text logo, and color preset.
+/shevanio-pi:models             Assign global model/effort routing to SDD/custom agents.
+/shevanio-pi:persona            Switch between gentleman and neutral persona modes.
+/shevanio-pi:background-subagents  Show or set the managed background-subagents policy, with its deciding source.
+/shevanio-pi:banner             Configure startup rose, text logo, and color preset.
 ```
 
 Typical flow:
 
 1. Open Pi in your repo.
-2. Run `/gentle:status`.
+2. Run `/shevanio-pi:status`.
 3. Run `/sdd-init` once per project, or when test/project capabilities change. This also runs the session SDD preflight.
 4. For a substantial change, ask Pi to use SDD. Natural-language requests are classified by the parent agent, not by brittle runtime regexes.
 5. Review the phase artifacts instead of trusting floating chat context.
 
 ## Core workflow
 
-1. **Inspect a local checkout.** Open Pi in the target repository, then run `/gentle:status` or `/gentle:doctor`.
+1. **Inspect a local checkout.** Open Pi in the target repository, then run `/shevanio-pi:status` or `/shevanio-pi:doctor`.
 2. **Plan when risk justifies it.** Small work stays direct; substantial work uses SDD with Engram, OpenSpec, or both so requirements and decisions survive compaction.
 3. **Build with evidence.** One focused writer implements the approved scope. When Strict TDD is available, apply and verify preserve RED → GREEN → TRIANGULATE → REFACTOR evidence.
 4. **Use runtime-owned RDD when available.** Gentle AI supplies any runtime-specific review instructions; this package does not recreate a lifecycle in documentation or prompts.
@@ -361,7 +363,7 @@ Engram-only mode is different by design: Engram is working memory and does not m
 
 ## SDD preflight and project files
 
-`shevanio-pi` does not require SDD agents to be copied into every project. The package ensures global Pi SDD assets exist under the Pi agent home and treats project-local files only as overrides/debug copies. Slash SDD flows such as `/sdd-*`, `/sdd-init`, and the explicit `/gentle:sdd-preflight` command run a lazy preflight and resolve session-scoped SDD preferences. For natural-language requests, the parent agent decides whether the work should use SDD and must run/reuse `/gentle:sdd-preflight` before continuing.
+`shevanio-pi` does not require SDD agents to be copied into every project. The package ensures global Pi SDD assets exist under the Pi agent home and treats project-local files only as overrides/debug copies. Slash SDD flows such as `/sdd-*`, `/sdd-init`, and the explicit `/shevanio-pi:sdd-preflight` command run a lazy preflight and resolve session-scoped SDD preferences. For natural-language requests, the parent agent decides whether the work should use SDD and must run/reuse `/shevanio-pi:sdd-preflight` before continuing.
 
 ```text
 ~/.pi/agent/agents/sdd-*.md
@@ -376,13 +378,13 @@ Canonical values are `auto` execution mode, `openspec` artifact store, `ask-on-r
 It does **not** overwrite existing global assets unless you explicitly run:
 
 ```text
-/gentle:install-sdd --force
+/shevanio-pi:install-sdd --force
 ```
 
 Manual preflight command:
 
 ```text
-/gentle:sdd-preflight
+/shevanio-pi:sdd-preflight
 ```
 
 ## Skill registry
@@ -457,7 +459,7 @@ Delegation contract:
 ## Persona modes
 
 ```text
-/gentle:persona
+/shevanio-pi:persona
 ```
 
 | Persona     | Behavior                                                                                                      |
@@ -477,12 +479,12 @@ A project can still override the global default with:
 .pi/gentle-ai/persona.json
 ```
 
-`/gentle:persona` writes the global config and updates an existing project override when one is present, so the current project does not stay stale. Run `/reload` or start a new Pi session after switching persona.
+`/shevanio-pi:persona` writes the global config and updates an existing project override when one is present, so the current project does not stay stale. Run `/reload` or start a new Pi session after switching persona.
 
 ## Model and effort assignment
 
 ```text
-/gentle:models
+/shevanio-pi:models
 ```
 
 The modal discovers:
@@ -509,9 +511,9 @@ Saved globally at:
 ~/.pi/gentle-ai/models.json
 ```
 
-Existing project-local `.pi/gentle-ai/models.json` files are still read as a legacy fallback when no global model config exists, but `/gentle:models` writes the shared global config.
+Existing project-local `.pi/gentle-ai/models.json` files are still read as a legacy fallback when no global model config exists, but `/shevanio-pi:models` writes the shared global config.
 
-Inside `/gentle:models`, press `x` to export the saved routing to `~/.pi/gentle-ai/models.export.json`, or `r` to restore from that file after confirmation. Export uses a versioned envelope and restore writes the normal `models.json` shape before applying routing to agents.
+Inside `/shevanio-pi:models`, press `x` to export the saved routing to `~/.pi/gentle-ai/models.export.json`, or `r` to restore from that file after confirmation. Export uses a versioned envelope and restore writes the normal `models.json` shape before applying routing to agents.
 
 Config shape (per agent):
 
@@ -533,18 +535,18 @@ Legacy string entries are still accepted and treated as `model`-only config.
 
 | Command                          | What it does                                                        |
 | -------------------------------- | ------------------------------------------------------------------- |
-| `/gentle:status`              | Shows package, SDD asset, OpenSpec, and global model config status. |
-| `/gentle:doctor`              | Runs read-only diagnostics for SDD assets, model/persona config, memory tools, and safety guards. |
-| `/gentle:models`                 | Opens global model + effort assignment UI. Press `x` to export and `r` to restore saved routing. |
-| `/gentle:persona`                | Switches global persona mode, with project override support.        |
-| `/gentle:background-subagents`   | Shows or sets the managed background-subagents policy (`status\|enable\|disable`), naming the source that decided it. |
-| `/gentle:banner`                 | Configures startup banner rose, text logo, and color preset.        |
-| `/gentle:toggle-rose`            | Toggles the startup rose.                                           |
-| `/gentle:toggle-text-logo`       | Toggles the startup text logo.                                      |
-| `/gentle:banner-color`           | Selects a startup banner color preset.                              |
+| `/shevanio-pi:status`              | Shows package, SDD asset, OpenSpec, and global model config status. |
+| `/shevanio-pi:doctor`              | Runs read-only diagnostics for SDD assets, model/persona config, memory tools, and safety guards. |
+| `/shevanio-pi:models`                 | Opens global model + effort assignment UI. Press `x` to export and `r` to restore saved routing. |
+| `/shevanio-pi:persona`                | Switches global persona mode, with project override support.        |
+| `/shevanio-pi:background-subagents`   | Shows or sets the managed background-subagents policy (`status\|enable\|disable`), naming the source that decided it. |
+| `/shevanio-pi:banner`                 | Configures startup banner rose, text logo, and color preset.        |
+| `/shevanio-pi:toggle-rose`            | Toggles the startup rose.                                           |
+| `/shevanio-pi:toggle-text-logo`       | Toggles the startup text logo.                                      |
+| `/shevanio-pi:banner-color`           | Selects a startup banner color preset.                              |
 | `/sdd-init`                      | Initializes or refreshes `openspec/config.yaml` (openspec/both stores only). |
-| `/gentle:install-sdd`         | Repairs missing global SDD runtime assets without overwriting files. |
-| `/gentle:install-sdd --force` | Force-refreshes installed global SDD assets.                         |
+| `/shevanio-pi:install-sdd`         | Repairs missing global SDD runtime assets without overwriting files. |
+| `/shevanio-pi:install-sdd --force` | Force-refreshes installed global SDD assets.                         |
 | `/skill-registry:refresh`        | Regenerates `.atl/skill-registry.md`.                               |
 | `/skill-creation`                | Creates or updates an LLM-first skill using the packaged `gentle-ai-skill-creator` contract and style guide. |
 
@@ -552,12 +554,12 @@ Package-owned global SDD runtime assets are also refreshed automatically on sess
 
 ### Background subagents policy
 
-Background delegation is off unless you turn it on. The policy is user-owned: only an explicit `/gentle:background-subagents enable` or `disable` writes it, and Pi automation never toggles it.
+Background delegation is off unless you turn it on. The policy is user-owned: only an explicit `/shevanio-pi:background-subagents enable` or `disable` writes it, and Pi automation never toggles it.
 
 ```text
-/gentle:background-subagents           Report the effective policy, the deciding source, and the resolved capability.
-/gentle:background-subagents enable    Write "on" to the global file.
-/gentle:background-subagents disable   Write "off" to the global file.
+/shevanio-pi:background-subagents           Report the effective policy, the deciding source, and the resolved capability.
+/shevanio-pi:background-subagents enable    Write "on" to the global file.
+/shevanio-pi:background-subagents disable   Write "off" to the global file.
 ```
 
 Four sources can decide the policy, and the first hit wins:
@@ -678,7 +680,7 @@ What it checks, against live scratch repositories:
 
 Prerequisites:
 
-- A real `gentle-ai` binary selected through the dev-binary override; there is no PATH or pinned-binary fallback, and the battery refuses to run without one. Either export `GENTLE_PI_GENTLE_AI_DEV_BINARY=<absolute path>` for the session, or register a persistent override with `/gentle:dev-binary <absolute path>` (stored at `~/.pi/gentle-ai/dev-binary.json` with schema `gentle-pi.dev-binary/v1`; the environment variable takes precedence over the registration, and the binary is re-validated and re-hashed on every resolution). Any real build works: an installed release binary or a locally built gentle-ai main.
+- A real `gentle-ai` binary selected through the dev-binary override; there is no PATH or pinned-binary fallback, and the battery refuses to run without one. Either export `GENTLE_PI_GENTLE_AI_DEV_BINARY=<absolute path>` for the session, or register a persistent override with `/shevanio-pi:dev-binary <absolute path>` (stored at `~/.pi/gentle-ai/dev-binary.json` with schema `gentle-pi.dev-binary/v1`; the environment variable takes precedence over the registration, and the binary is re-validated and re-hashed on every resolution). Any real build works: an installed release binary or a locally built gentle-ai main.
 - A Git checkout or worktree of this repository. The battery is a contributor tool wired to the repository layout and is excluded from `pnpm test` and CI by construction; run it from the repo, not from an installed Pi package.
 
 The battery owns one throwaway scratch root under the OS temp directory and never touches the enclosing repository. Before any review lifecycle it creates private `HOME`, XDG config/cache/data/state, temporary, and RDD state directories inside that root; it proves RDD starts `off/default`, explicitly opts in with sandbox-global RDD, and removes the complete root after the run. It never requires or changes the user's ambient RDD mode. The default run spends no model tokens; `--with-model` launches one real reviewer model run and costs model spend.

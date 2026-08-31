@@ -363,7 +363,7 @@ test("public gentle:review-mode handler reports current operations, global-off w
 		},
 	} as unknown as NativeReviewCli;
 	const runtime = parityRuntime(native);
-	const command = runtime.commands.get("gentle:review-mode");
+	const command = runtime.commands.get("shevanio-pi:review-mode");
 	assert.ok(command);
 	const notices: Array<{ message: string; type?: string }> = [];
 	const ctx = context(process.cwd(), "review-mode-command", notices);
@@ -376,7 +376,7 @@ test("public gentle:review-mode handler reports current operations, global-off w
 	assert.equal(notices[2]?.type, "warning");
 	assert.match(notices[2]?.message ?? "", /gentle-ai review mode enable --scope=global/);
 
-	const unavailable = parityRuntime({} as NativeReviewCli).commands.get("gentle:review-mode");
+	const unavailable = parityRuntime({} as NativeReviewCli).commands.get("shevanio-pi:review-mode");
 	assert.ok(unavailable);
 	const unavailableNotices: Array<{ message: string; type?: string }> = [];
 	await unavailable!.handler("status", context(process.cwd(), "review-mode-unavailable", unavailableNotices));
@@ -424,7 +424,7 @@ test("public consent relay is session-bound, one-shot, and candidate-scoped", as
 		scope: "clone",
 		status: { global: "", cloneLocal: "off", effective: "off", source: "clone_local" },
 	});
-	const disable = second.commands.get("gentle:review-mode");
+	const disable = second.commands.get("shevanio-pi:review-mode");
 	assert.ok(disable);
 	await disable!.handler("disable", context(cwd, "session-b"));
 	const staleModeCleared = await answerConsent(second, cwd, nextCandidate.consent_binding, "declined", "session-b");

@@ -558,7 +558,7 @@ async function runBackgroundSubagents(
 		GENTLE_PI_BACKGROUND_SUBAGENTS: undefined,
 		...env,
 	});
-	const command = registeredCommands().get("gentle:background-subagents");
+	const command = registeredCommands().get("shevanio-pi:background-subagents");
 	assert.ok(command, "gentle:background-subagents must be registered");
 	const notices: Array<{ message: string; type?: string }> = [];
 	await command!.handler(argument, notifyContext(cwd, notices));
@@ -567,7 +567,7 @@ async function runBackgroundSubagents(
 }
 
 test("gentle:background-subagents is registered and declares user-initiated sub-actions", () => {
-	const command = registeredCommands().get("gentle:background-subagents");
+	const command = registeredCommands().get("shevanio-pi:background-subagents");
 	assert.ok(command, "gentle:background-subagents must be registered");
 	assert.match(command!.description ?? "", /status\|enable\|disable/);
 	assert.match(
@@ -761,7 +761,7 @@ test("an unknown sub-action warns and changes nothing", async (t) => {
 	assert.equal(notice.type, "warning");
 	assert.equal(
 		notice.message,
-		'Unknown /gentle:background-subagents sub-action "toggle". Use status, enable, or disable.',
+		'Unknown /shevanio-pi:background-subagents sub-action "toggle". Use status, enable, or disable.',
 	);
 	assert.equal(
 		existsSync(join(configHome, "background-subagents.json")),

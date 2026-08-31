@@ -6,11 +6,12 @@ import { existsSync } from "node:fs";
 import { chmod, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { discoverAndLoadExtensions } from "@earendil-works/pi-coding-agent";
+import { createAgentSession, DefaultResourceLoader, SessionManager } from "@earendil-works/pi-coding-agent";
 import { matchesKey } from "@earendil-works/pi-tui";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { stripAnsi } from "../lib/terminal-theme.ts";
 import { domainHashV1 } from "../lib/review-canonical.ts";
+import { deprecatedAliasNotice } from "../lib/command-alias.ts";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const EXTENSIONS = [
@@ -21,26 +22,9 @@ const EXTENSIONS = [
 	"extensions/startup-banner.ts",
 ];
 
-const EXPECTED_BANNER_COMMANDS = [
-	"gentle:banner",
-	"gentle:toggle-rose",
-	"gentle:toggle-text-logo",
-	"gentle:banner-color",
-];
-
-const EXPECTED_COMMANDS = [
-	"gentle:install-sdd",
-	"gentle:sdd-preflight",
-	"sdd-status",
-	"sdd-continue",
-	"gentle:models",
-	"gentle:persona",
-	"gentle:status",
-	"gentle:doctor",
-	"sdd-init",
-	"skill-registry:refresh",
-	...EXPECTED_BANNER_COMMANDS,
-];
+const COMMAND_SUFFIXES = ["background-subagents", "banner", "banner-color", "dev-binary", "doctor", "install-sdd", "models", "persona", "review-mode", "sdd-preflight", "status", "toggle-rose", "toggle-text-logo"];
+const GENERIC_COMMANDS = ["sdd-status", "sdd-continue", "sdd-init", "skill-registry:refresh"];
+const EXPECTED_COMMANDS = [...COMMAND_SUFFIXES.flatMap((suffix) => [`shevanio-pi:${suffix}`, `gentle:${suffix}`]), ...GENERIC_COMMANDS];
 
 const FORBIDDEN_COMPAT_COMMANDS = [
 	"gentle-ai:install-sdd",
@@ -136,6 +120,7 @@ function createUi() {
 		notifications,
 		selections,
 		notify(message, level = "info") {
+			if (message.startsWith("Deprecated alias;")) return;
 			notifications.push({ message, level });
 		},
 		async confirm() {
@@ -216,11 +201,15 @@ async function loadExtensions(pi) {
 }
 
 async function run() {
+	const isolatedHome = await tempWorkspace();
 	const globalConfigHome = await tempWorkspace();
 	const globalAgentHome = await tempWorkspace();
 	const ambientTestAssetsDir = await tempWorkspace();
+	process.env.HOME = isolatedHome;
+	process.env.USERPROFILE = isolatedHome;
 	process.env.GENTLE_PI_CONFIG_HOME = globalConfigHome;
 	process.env.GENTLE_PI_AGENT_HOME = globalAgentHome;
+	process.env.GENTLE_PI_NO_SKILL_REGISTRY = "1";
 	process.env.GENTLE_PI_TEST_ASSETS_DIR = ambientTestAssetsDir;
 	const globalModelsPath = join(globalConfigHome, "models.json");
 	const globalSubagentsPath = join(globalAgentHome, "subagents.json");
@@ -343,6 +332,7 @@ async function run() {
 	for (const name of EXPECTED_COMMANDS) {
 		assert.ok(commands.has(name), `missing command ${name}`);
 	}
+	assert.equal(commands.size, EXPECTED_COMMANDS.length, "the package command inventory must be exact");
 	for (const name of FORBIDDEN_COMPAT_COMMANDS) {
 		assert.equal(commands.has(name), false, `compat command should not be registered: ${name}`);
 	}
@@ -373,12 +363,39 @@ async function run() {
 		);
 	}
 
-	const discovered = await discoverAndLoadExtensions(["./extensions"], ROOT);
-	assert.deepEqual(
-		discovered.errors,
-		[],
-		"declared extension directory must load without invalid helper modules",
-	);
+	const runtimeCwd = await tempWorkspace();
+	const runtimeAgentDir = await tempWorkspace();
+	try {
+		const loader = new DefaultResourceLoader({ cwd: runtimeCwd, agentDir: runtimeAgentDir, additionalExtensionPaths: EXTENSIONS.map((path) => join(ROOT, path)), noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true });
+		await loader.reload();
+		assert.deepEqual(loader.getExtensions().errors, [], "Pi's resource loader must load every package extension");
+		const { session } = await createAgentSession({ cwd: runtimeCwd, agentDir: runtimeAgentDir, resourceLoader: loader, sessionManager: SessionManager.inMemory(runtimeCwd), noTools: "builtin" });
+		const runner = session.extensionRunner;
+		const registered = runner.getRegisteredCommands();
+		for (const name of EXPECTED_COMMANDS) {
+			const matches = registered.filter((command) => command.name === name);
+			assert.equal(matches.length, 1, `${name} must be registered exactly once`);
+			assert.equal(matches[0].invocationName, name, `${name} must not receive a duplicate suffix`);
+		}
+		assert.equal(registered.some(({ invocationName }) => /:(?:1|2)$/.test(invocationName)), false);
+		for (const suffix of COMMAND_SUFFIXES) assert.ok(runner.getCommand(`gentle:${suffix}`).description.startsWith(deprecatedAliasNotice(suffix)));
+		assert.deepEqual(runner.getAllRegisteredTools().map(({ definition }) => definition.name).filter((name) => name.startsWith("gentle_review")).sort(), ["gentle_review", "gentle_review_capture", "gentle_review_scope"]);
+		const routed = [];
+		runner.setUIContext({ ...runner.getUIContext(), notify(message, type = "info") { routed.push({ message, type }); } });
+		await session.prompt("/shevanio-pi:status");
+		assert.equal(routed.length, 1, "canonical status must route exactly once without a warning");
+		const canonicalStatus = routed[0];
+		routed.length = 0;
+		await session.prompt("/gentle:status");
+		assert.deepEqual(routed, [{ message: deprecatedAliasNotice("status"), type: "warning" }, canonicalStatus], "legacy status must warn once and route the canonical handler once");
+		routed.length = 0;
+		await session.prompt("/sdd-status --json");
+		assert.equal(routed.length, 1, "generic SDD commands must remain directly routable without aliases");
+		await runner.emit({ type: "session_shutdown", reason: "quit" });
+	} finally {
+		await rm(runtimeCwd, { recursive: true, force: true });
+		await rm(runtimeAgentDir, { recursive: true, force: true });
+	}
 
 	// orchestrator-lazy-diet: Pi Subagent Model Routing detail (the "do not
 	// pass the `model` parameter by default" / SDD-model-assignment-scoping
@@ -1372,7 +1389,7 @@ async function run() {
 	try {
 		const ctx = createCtx(installCwd, true);
 		await commands.get("gentle:install-sdd").handler("", ctx);
-		assert.match(ctx.ui.notifications.at(-1).message, /Global Gentle AI SDD assets installed/);
+		assert.match(ctx.ui.notifications.at(-1).message, /Global Shevanio Pi SDD assets installed/);
 		assert.equal(existsSync(join(installCwd, ".pi", "agents", "sdd-apply.md")), false);
 		assert.equal(existsSync(join(globalAgentHome, "agents", "sdd-apply.md")), true);
 		assert.equal(existsSync(join(globalAgentHome, "agents", "sdd-status.md")), true);
@@ -1396,7 +1413,7 @@ async function run() {
 		assert.match(ctx.ui.notifications.at(-1).message, /Project-local SDD agent overrides: 2 file\(s\)/);
 		assert.match(ctx.ui.notifications.at(-1).message, /local SDD agents shadow package assets/);
 		await commands.get("gentle:doctor").handler("", ctx);
-		assert.match(ctx.ui.notifications.at(-1).message, /el Gentleman doctor/);
+		assert.match(ctx.ui.notifications.at(-1).message, /Shevanio Pi doctor/);
 		assert.match(ctx.ui.notifications.at(-1).message, /Sensitive-path guard active/);
 		pi.setActiveTools([{ name: "engram.mem_save" }]);
 		await commands.get("gentle:doctor").handler("", ctx);
@@ -2101,6 +2118,9 @@ async function run() {
 	} finally {
 		await rm(registryCwd, { recursive: true, force: true });
 	}
+	await rm(globalConfigHome, { recursive: true, force: true });
+	await rm(globalAgentHome, { recursive: true, force: true });
+	await rm(isolatedHome, { recursive: true, force: true });
 }
 
 run().catch((error) => {

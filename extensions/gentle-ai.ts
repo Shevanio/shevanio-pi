@@ -98,6 +98,7 @@ import {
 import { renderGentleAiLifecycleCall, renderGentleAiResult, type GentleAiRenderContext } from "../lib/gentle-ai-renderer.ts";
 import { sanitizeTerminalText, stripAnsi } from "../lib/terminal-theme.ts";
 import { CandidateViewError, CandidateViewRegistry, injectReviewCandidateView, readCandidateContextManifestPage, resolveCanonicalCandidateBase, type CandidateView } from "../lib/review-candidate-view.ts";
+import { registerCanonicalCommand } from "../lib/command-alias.ts";
 import {
 	GentleAiDevBinaryOverrideError,
 	registerGentleAiDevBinary,
@@ -2434,7 +2435,7 @@ async function handleModelsCommand(ctx: ExtensionContext): Promise<void> {
 	const savedConfig = await readSavedModelConfigAsync(ctx.cwd);
 	if (savedConfig.status === "invalid") {
 		ctx.ui.notify(
-			`el Gentleman cannot open model config because ${savedConfig.path} is invalid JSON or not an object. Fix or remove the file, then run /gentle:models again.`,
+			`el Gentleman cannot open model config because ${savedConfig.path} is invalid JSON or not an object. Fix or remove the file, then run /shevanio-pi:models again.`,
 			"warning",
 		);
 		return;
@@ -2963,9 +2964,9 @@ const REVIEW_MODE_DISABLED_OUTCOME = "review-mode-disabled";
 // same. Leaving this undefined would hand the single most common state a dead
 // end.
 function reviewModeContinuation(source: NativeReviewModeSource): string | undefined {
-	if (source === NATIVE_REVIEW_MODE_SOURCE.CLONE_LOCAL) return "Run `gentle-ai review mode enable --scope=global` if global RDD is still off, then run /gentle:review-mode enable to clear this clone-local override.";
-	if (source === NATIVE_REVIEW_MODE_SOURCE.GLOBAL) return "Run `gentle-ai review mode enable --scope=global` to turn reviews back on; /gentle:review-mode enable only clears the clone-local setting, which cannot override a global off.";
-	return "Run `gentle-ai review mode enable --scope=global` to opt in; RDD is off by default until explicitly enabled. /gentle:review-mode enable only clears a clone-local override and cannot enable global RDD.";
+	if (source === NATIVE_REVIEW_MODE_SOURCE.CLONE_LOCAL) return "Run `gentle-ai review mode enable --scope=global` if global RDD is still off, then run /shevanio-pi:review-mode enable to clear this clone-local override.";
+	if (source === NATIVE_REVIEW_MODE_SOURCE.GLOBAL) return "Run `gentle-ai review mode enable --scope=global` to turn reviews back on; /shevanio-pi:review-mode enable only clears the clone-local setting, which cannot override a global off.";
+	return "Run `gentle-ai review mode enable --scope=global` to opt in; RDD is off by default until explicitly enabled. /shevanio-pi:review-mode enable only clears a clone-local override and cannot enable global RDD.";
 }
 
 // Names the situation before the mechanism, then the mechanism, mirroring
@@ -5391,7 +5392,7 @@ function createGentleAiExtensionForTesting(
 			const modelResult = await applySavedModelConfig(ctx);
 			if (ctx.hasUI && modelResult.invalidPath) {
 				ctx.ui.notify(
-					`el Gentleman skipped model config because ${modelResult.invalidPath} is invalid JSON or not an object. Fix or remove the file, then run /gentle:models again.`,
+					`el Gentleman skipped model config because ${modelResult.invalidPath} is invalid JSON or not an object. Fix or remove the file, then run /shevanio-pi:models again.`,
 					"warning",
 				);
 				return;
@@ -5476,20 +5477,20 @@ function createGentleAiExtensionForTesting(
 		return await confirmCommand(event.input.command, ctx, pi.events, herdrLifecycle);
 	});
 
-	pi.registerCommand("gentle:install-sdd", {
+	registerCanonicalCommand(pi, "install-sdd", {
 		description:
-			"Repair or refresh global Gentle AI SDD subagent and chain assets.",
+			"Repair or refresh global Shevanio Pi SDD subagent and chain assets.",
 		handler: async (args, ctx) => {
 			const force = args.includes("--force");
 			const result = installSddAssets(ctx.cwd, force);
 			ctx.ui.notify(
-				`Global Gentle AI SDD assets installed: ${result.agents} agent(s), ${result.chains} chain(s), ${result.support} support file(s), ${result.skipped} already present.`,
+				`Global Shevanio Pi SDD assets installed: ${result.agents} agent(s), ${result.chains} chain(s), ${result.support} support file(s), ${result.skipped} already present.`,
 				"info",
 			);
 		},
 	});
 
-	pi.registerCommand("gentle:sdd-preflight", {
+	registerCanonicalCommand(pi, "sdd-preflight", {
 		description:
 			"Run or reuse the lazy SDD preflight for this Pi session.",
 		handler: async (_args, ctx) => {
@@ -5539,14 +5540,14 @@ function createGentleAiExtensionForTesting(
 		},
 	});
 
-	pi.registerCommand("gentle:models", {
+	registerCanonicalCommand(pi, "models", {
 		description: "Configure global per-agent models for el Gentleman.",
 		handler: async (_args, ctx) => {
 			await handleModelsCommand(ctx);
 		},
 	});
 
-	pi.registerCommand("gentle:persona", {
+	registerCanonicalCommand(pi, "persona", {
 		description: "Switch el Gentleman persona between gentleman and neutral.",
 		handler: async (_args, ctx) => {
 			await handlePersonaCommand(ctx);
@@ -5588,7 +5589,7 @@ function createGentleAiExtensionForTesting(
 		};
 	};
 
-	pi.registerCommand("gentle:dev-binary", {
+	registerCanonicalCommand(pi, "dev-binary", {
 		description: "Register, inspect, or clear the persistent Gentle AI dev-binary override (status | <absolute path> | off). Unpinned, field-test only.",
 		handler: async (args, ctx) => {
 			const argument = args.trim();
@@ -5613,8 +5614,8 @@ function createGentleAiExtensionForTesting(
 		},
 	});
 
-	pi.registerCommand("gentle:doctor", {
-		description: "Run read-only Gentle AI diagnostics for this Pi workspace.",
+	registerCanonicalCommand(pi, "doctor", {
+		description: "Run read-only Shevanio Pi diagnostics for this workspace.",
 		handler: async (_args, ctx) => {
 			const agentsInstalled = existsSync(
 				join(gentlePiAgentHome(), "agents", "sdd-apply.md"),
@@ -5634,7 +5635,7 @@ function createGentleAiExtensionForTesting(
 			const engramActive = hasWritableEngramTool(pi);
 			const devBinary = await describeDevBinaryOverride();
 			const lines = [
-				"el Gentleman doctor",
+				"Shevanio Pi doctor",
 				`${agentsInstalled ? "pass" : "fail"}: Global SDD agents ${agentsInstalled ? "installed" : "missing"}`,
 				`${chainsInstalled ? "pass" : "fail"}: Global SDD chains ${chainsInstalled ? "installed" : "missing"}`,
 				`${staleSddAssets === 0 ? "pass" : "warn"}: Global SDD asset drift ${staleSddAssets} file(s)`,
@@ -5645,10 +5646,10 @@ function createGentleAiExtensionForTesting(
 				"pass: Sensitive-path guard active for read/write/edit tools",
 				`${engramActive ? "pass" : "warn"}: Engram memory tools ${engramActive ? "active" : "not active in this session"}`,
 				...(devBinary.state === "active" ? [`warn: ${devBinary.line}`] : []),
-				...(devBinary.state === "invalid" ? [`fail: ${devBinary.line}`, "remedy: fix the dev binary override or clear it with /gentle:dev-binary off (or unset GENTLE_PI_GENTLE_AI_DEV_BINARY)"] : []),
+				...(devBinary.state === "invalid" ? [`fail: ${devBinary.line}`, "remedy: fix the dev binary override or clear it with /shevanio-pi:dev-binary off (or unset GENTLE_PI_GENTLE_AI_DEV_BINARY)"] : []),
 			];
 			if (!agentsInstalled || !chainsInstalled) {
-				lines.push("remedy: run /gentle:install-sdd --force to refresh global SDD assets intentionally");
+				lines.push("remedy: run /shevanio-pi:install-sdd --force to refresh global SDD assets intentionally");
 			}
 			if (modelConfig.status === "invalid") {
 				lines.push(`remedy: fix or remove ${modelConfig.path}`);
@@ -5663,12 +5664,12 @@ function createGentleAiExtensionForTesting(
 		},
 	});
 
-	pi.registerCommand("gentle:review-mode", {
+	registerCanonicalCommand(pi, "review-mode", {
 		description: "Show or set the Gentle AI review-driven-development kill switch (status|disable|enable). Every sub-action is user-initiated only; Pi automation never toggles it.",
 		handler: async (args, ctx) => {
 			const subAction = args.trim().length === 0 ? NATIVE_REVIEW_MODE_OPERATION.STATUS : args.trim();
 			if (subAction !== NATIVE_REVIEW_MODE_OPERATION.STATUS && subAction !== NATIVE_REVIEW_MODE_OPERATION.ENABLE && subAction !== NATIVE_REVIEW_MODE_OPERATION.DISABLE) {
-				ctx.ui.notify(`Unknown /gentle:review-mode sub-action "${subAction}". Use status, disable, or enable.`, "warning");
+				ctx.ui.notify(`Unknown /shevanio-pi:review-mode sub-action "${subAction}". Use status, disable, or enable.`, "warning");
 				return;
 			}
 			if (nativeReviewCli?.reviewMode === undefined) {
@@ -5694,7 +5695,7 @@ function createGentleAiExtensionForTesting(
 				// that, and name the global-scope command that resolves it.
 				const requested = subAction === NATIVE_REVIEW_MODE_OPERATION.ENABLE ? "on" : subAction === NATIVE_REVIEW_MODE_OPERATION.DISABLE ? "off" : result.status.effective;
 				if (result.status.effective !== requested) {
-					ctx.ui.notify(`${report}\nThat did not turn reviews back on: /gentle:review-mode enable only clears a clone-local override, which cannot override a global off. Run \`gentle-ai review mode enable --scope=global\` to turn them back on.`, "warning");
+					ctx.ui.notify(`${report}\nThat did not turn reviews back on: /shevanio-pi:review-mode enable only clears a clone-local override, which cannot override a global off. Run \`gentle-ai review mode enable --scope=global\` to turn them back on.`, "warning");
 					return;
 				}
 				ctx.ui.notify(report, "info");
@@ -5708,16 +5709,16 @@ function createGentleAiExtensionForTesting(
 		},
 	});
 
-	// Mirrors gentle:review-mode: a user-owned switch, never an automated one.
+	// Mirrors shevanio-pi:review-mode: a user-owned switch, never an automated one.
 	// It matters more here than there, because this policy governs whether
 	// background subagents may be launched at all, so nothing in Pi may write
 	// it. The only writer is this handler, reached only by explicit invocation.
-	pi.registerCommand("gentle:background-subagents", {
+	registerCanonicalCommand(pi, "background-subagents", {
 		description: "Show or set the managed background-subagents policy (status|enable|disable). Every sub-action is user-initiated only; Pi automation never toggles it.",
 		handler: async (args, ctx) => {
 			const subAction = args.trim().length === 0 ? "status" : args.trim();
 			if (subAction !== "status" && subAction !== "enable" && subAction !== "disable") {
-				ctx.ui.notify(`Unknown /gentle:background-subagents sub-action "${subAction}". Use status, enable, or disable.`, "warning");
+				ctx.ui.notify(`Unknown /shevanio-pi:background-subagents sub-action "${subAction}". Use status, enable, or disable.`, "warning");
 				return;
 			}
 			try {
@@ -5733,8 +5734,8 @@ function createGentleAiExtensionForTesting(
 		},
 	});
 
-	pi.registerCommand("gentle:status", {
-		description: "Show Gentle AI package status for this project.",
+	registerCanonicalCommand(pi, "status", {
+		description: "Show Shevanio Pi package status for this project.",
 		handler: async (_args, ctx) => {
 			const agentsInstalled = existsSync(
 				join(gentlePiAgentHome(), "agents", "sdd-apply.md"),
@@ -5751,14 +5752,14 @@ function createGentleAiExtensionForTesting(
 			const devBinary = await describeDevBinaryOverride();
 			ctx.ui.notify(
 				[
-					"el Gentleman package is active.",
+					"Shevanio Pi package is active.",
 					...(devBinary.state === "inactive" ? [] : [devBinary.line]),
 					`Persona: ${readPersonaMode(ctx.cwd)}`,
 					`Global SDD agents: ${agentsInstalled ? "installed" : "not installed"}`,
 					`Global SDD chains: ${chainsInstalled ? "installed" : "not installed"}`,
 					`Global SDD assets stale: ${staleSddAssets} file(s)${
 						staleSddAssets > 0
-							? " — run /gentle:install-sdd --force to refresh intentionally"
+							? " — run /shevanio-pi:install-sdd --force to refresh intentionally"
 							: ""
 					}`,
 					`Project-local SDD agent overrides: ${localSddAgentOverrides} file(s)${
