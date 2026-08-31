@@ -53,6 +53,12 @@ test("package-managed agent and support guidance uses ownership-safe identities"
 	}
 });
 
+test("active branch skill uses the canonical parent identity description", () => {
+	const content = source("skills/branch-pr/SKILL.md");
+	assert.ok(content.includes("Create Shevanio AI pull requests with issue-first checks."));
+	assert.equal(content.includes("Create Gentle AI pull requests with issue-first checks."), false);
+});
+
 test("provider and compatibility identities remain frozen", () => {
 	const frozen: Record<string, readonly string[]> = {
 		"README.md": ["`GENTLE_PI_*`", "`gentle-pi.*`", "`gentle-pi` is a transitional compatibility package"],

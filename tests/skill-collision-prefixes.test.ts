@@ -11,6 +11,12 @@ function readSkillName(dir: string): string | undefined {
 	return __testing.parseFrontmatter(source).name;
 }
 
+test("branch PR skill keeps its exact compatibility selector", () => {
+	const source = readFileSync(join(repoRoot, "skills", "branch-pr", "SKILL.md"), "utf8");
+	assert.equal(__testing.parseFrontmatter(source).name, "gentle-ai-branch-pr");
+	assert.match(source, /^name: gentle-ai-branch-pr$/m);
+});
+
 const PREFIXED_NAMES: Record<string, string> = {
 	"branch-pr": "gentle-ai-branch-pr",
 	"chained-pr": "gentle-ai-chained-pr",
