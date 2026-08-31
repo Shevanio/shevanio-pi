@@ -611,7 +611,7 @@ Use it when you want skills available normally but do not want Shevanio Pi to re
 
 ## Included skills
 
-- `gentle-ai` — harness discipline for controlled Pi work.
+- `gentle-ai` — public compatibility skill selector whose current guidance uses Shevanio AI as the parent identity and Shevanio Pi as the package/runtime harness.
 - `gentle-ai-branch-pr` — issue-first PR preparation.
 - `gentle-ai-chained-pr` — split oversized changes into reviewable PR chains.
 - `work-unit-commits` — commits as reviewable work units.

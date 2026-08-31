@@ -1,6 +1,6 @@
 # SDD Orchestrator Workflow
 
-This is the lazy-loaded SDD workflow surface for el Gentleman on Pi. Read this file before handling `/sdd-*`, natural-language SDD requests, SDD continuation/routing, apply/verify/sync/archive work, or SDD/Judgment-Day phase delegation.
+This is the lazy-loaded SDD workflow surface. Shevanio AI is the parent/product identity; Shevanio Pi is the package/runtime harness and ecosystem configurator. Read this file before handling `/sdd-*`, natural-language SDD requests, SDD continuation/routing, apply/verify/sync/archive work, or SDD/Judgment-Day phase delegation.
 
 ## SDD Workflow
 

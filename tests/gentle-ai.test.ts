@@ -297,6 +297,17 @@ test("runtime guidance keeps review policy out of the static orchestrator", () =
 	}
 });
 
+test("gentle-ai compatibility skill carries canonical identity and provider-owned RDD wording", () => {
+	const skill = readFileSync("skills/gentle-ai/SKILL.md", "utf8");
+	const providerOwnedRdd = "Gentle AI dynamically supplies runtime-specific RDD instructions at runtime. Treat them as the sole lifecycle authority. This skill never defines a review route, command sequence, state machine, approval or gate policy, recovery path, or fallback; when no native instruction is available, follow ordinary repository policy without inventing one.";
+
+	assert.match(skill, /Shevanio AI is the parent\/product identity/);
+	assert.match(skill, /Shevanio Pi is the package\/runtime harness and ecosystem configurator/);
+	assert.match(skill, /## Gentle AI RDD Ownership/);
+	assert.equal(skill.split(providerOwnedRdd).length - 1, 1);
+	assert.doesNotMatch(skill, /\bel Gentleman\b/);
+});
+
 test("ordinary native capture exposes a registered schema and STATUS binding copied unchanged to one slot", async (t) => {
 	const tools = new Map<string, { name: string; parameters: { required?: readonly string[] } }>();
 	const pi = {

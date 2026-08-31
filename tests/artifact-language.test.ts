@@ -179,6 +179,8 @@ test("orchestrator lazy-loads detailed SDD workflow", async () => {
 	assert.match(workflow, /## Strict TDD Forwarding/);
 	assert.match(workflow, /## Review Workload Guard/);
 	assert.match(workflow, /## Result Contract/);
+	assert.match(workflow, /Shevanio AI is the parent\/product identity; Shevanio Pi is the package\/runtime harness and ecosystem configurator\./);
+	assert.doesNotMatch(workflow, /\bel Gentleman\b/);
 });
 
 test("persistent harness prompt assets do not hardcode Spanish SDD artifact copy", async () => {
