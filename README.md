@@ -580,7 +580,19 @@ Reads strictly accept canonical schema `shevanio-pi.background-subagents/v1` and
 
 `enable` and `disable` write only canonical JSON to `SHEVANIO_PI_CONFIG_HOME ?? GENTLE_PI_CONFIG_HOME ?? ~/.pi/shevanio-pi`; an explicit legacy selector chooses the location but not the payload schema. Status names the deciding source/path and same-scope shadowed source. Conflicting canonical/legacy values warn; equal duplicates are informational. If both selectors resolve to one path, it is read once without a false collision. A project file that outranks a global write is reported truthfully. Capability (`ready` or `absent`) separately reports whether `subagent_run` is callable.
 
-Startup banner settings are global and default to the current pink rose + text logo. Supported color presets are `pink`, `cyan`, `yellow`, and `green`.
+### Startup banner configuration
+
+Startup banner settings are global-only. The first present source wins:
+
+1. `${SHEVANIO_PI_CONFIG_HOME:-~/.pi/shevanio-pi}/banner.json` (canonical)
+2. `${GENTLE_PI_CONFIG_HOME:-~/.pi/gentle-ai}/banner.json` (legacy read compatibility)
+3. Built-in defaults: `showRose=true`, `showTextLogo=true`, `color=pink`
+
+The unversioned JSON shape remains those three fields. Bad JSON, unreadable files, arrays, and non-objects normalize to all defaults; missing or invalid managed fields use their field defaults, and unknown fields are ignored. A present canonical file remains authoritative after normalization and never falls through to legacy. Reads and session startup never create, copy, move, merge, rewrite, or delete either file.
+
+When distinct canonical and legacy files both exist, diagnostics name the shadowed legacy path; different normalized values warn, while equal normalized values are informational. Selectors that normalize to one path are read once without a false collision.
+
+Explicit banner commands write only normalized managed fields to `SHEVANIO_PI_CONFIG_HOME ?? GENTLE_PI_CONFIG_HOME ?? ~/.pi/shevanio-pi`. They resolve again after writing and warn instead of claiming success when a different canonical source still outranks that target. Supported color presets are `pink`, `cyan`, `yellow`, and `green`.
 
 Startup flag:
 

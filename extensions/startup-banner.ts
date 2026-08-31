@@ -5,7 +5,7 @@ import * as os from "node:os";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { registerCanonicalCommand } from "../lib/command-alias.ts";
 
 const execAsync = promisify(exec);
@@ -24,6 +24,7 @@ const DEFAULT_BANNER_CONFIG: BannerConfig = {
   color: "pink",
 };
 const BANNER_COLORS: BannerColor[] = ["pink", "cyan", "yellow", "green"];
+const BANNER_FILE = "banner.json";
 const BANNER_PALETTES: Record<BannerColor, { rose: [number, number, number]; label: [number, number, number]; value: [number, number, number]; logoFresh: [number, number, number]; logoDim: [number, number, number] }> = {
   pink: { rose: [255, 118, 195], label: [200, 100, 160], value: [255, 140, 210], logoFresh: [255, 138, 206], logoDim: [95, 30, 60] },
   cyan: { rose: [95, 210, 255], label: [85, 170, 205], value: [130, 225, 255], logoFresh: [105, 220, 255], logoDim: [25, 80, 100] },
@@ -57,12 +58,18 @@ function rgb(r: number, g: number, b: number, text: string): string {
   return `\x1b[38;2;${r};${g};${b}m${text}\x1b[39m`;
 }
 
-function gentleAiConfigHome(): string {
-  return process.env.GENTLE_PI_CONFIG_HOME ?? join(os.homedir(), ".pi", "gentle-ai");
+type BannerSource = "canonical" | "legacy" | "default";
+interface BannerResolution {
+  config: BannerConfig;
+  source: BannerSource;
+  decidingPath?: string;
+  shadowedLegacy?: { path: string; config: BannerConfig };
 }
 
-function bannerConfigPath(): string {
-  return join(gentleAiConfigHome(), "banner.json");
+interface BannerConfigOptions {
+  env?: Record<string, string | undefined>;
+  home?: string;
+  read?: (path: string) => Promise<string>;
 }
 
 function normalizeBannerConfig(value: unknown): BannerConfig {
@@ -75,19 +82,95 @@ function normalizeBannerConfig(value: unknown): BannerConfig {
   };
 }
 
-async function readBannerConfig(): Promise<BannerConfig> {
-  try {
-    return normalizeBannerConfig(JSON.parse(await readFile(bannerConfigPath(), "utf8")));
-  } catch {
-    return { ...DEFAULT_BANNER_CONFIG };
+async function resolveBannerConfig(options: BannerConfigOptions = {}): Promise<BannerResolution> {
+  const env = options.env ?? process.env;
+  const home = options.home ?? os.homedir();
+  const canonicalPath = resolve(join(env.SHEVANIO_PI_CONFIG_HOME ?? join(home, ".pi", "shevanio-pi"), BANNER_FILE));
+  const legacyPath = resolve(join(env.GENTLE_PI_CONFIG_HOME ?? join(home, ".pi", "gentle-ai"), BANNER_FILE));
+  const read = options.read ?? ((path: string) => readFile(path, "utf8"));
+  const candidate = async (path: string): Promise<BannerConfig | undefined> => {
+    try {
+      const raw = await read(path);
+      try { return normalizeBannerConfig(JSON.parse(raw)); }
+      catch { return { ...DEFAULT_BANNER_CONFIG }; }
+    } catch (error) {
+      return (error as NodeJS.ErrnoException).code === "ENOENT" ? undefined : { ...DEFAULT_BANNER_CONFIG };
+    }
+  };
+  const canonical = await candidate(canonicalPath);
+  if (canonicalPath === legacyPath) {
+    return canonical === undefined
+      ? { config: { ...DEFAULT_BANNER_CONFIG }, source: "default" }
+      : { config: canonical, source: "canonical", decidingPath: canonicalPath };
   }
+  const legacy = await candidate(legacyPath);
+  if (canonical !== undefined) return {
+    config: canonical,
+    source: "canonical",
+    decidingPath: canonicalPath,
+    ...(legacy === undefined ? {} : { shadowedLegacy: { path: legacyPath, config: legacy } }),
+  };
+  if (legacy !== undefined) return { config: legacy, source: "legacy", decidingPath: legacyPath };
+  return { config: { ...DEFAULT_BANNER_CONFIG }, source: "default" };
 }
 
-async function writeBannerConfig(config: BannerConfig): Promise<void> {
-  const path = bannerConfigPath();
-  await mkdir(join(path, ".."), { recursive: true });
-  await writeFile(path, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+function bannerWriteTarget(options: BannerConfigOptions = {}): string {
+  const env = options.env ?? process.env;
+  return resolve(join(env.SHEVANIO_PI_CONFIG_HOME ?? env.GENTLE_PI_CONFIG_HOME ?? join(options.home ?? os.homedir(), ".pi", "shevanio-pi"), BANNER_FILE));
 }
+
+async function writeBannerConfig(config: BannerConfig, options: BannerConfigOptions = {}): Promise<string> {
+  const path = bannerWriteTarget(options);
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, `${JSON.stringify(normalizeBannerConfig(config), null, 2)}\n`, "utf8");
+  return path;
+}
+
+function describeBannerSource(resolution: BannerResolution): string {
+  if (resolution.source === "default") return "built-in defaults";
+  return `${resolution.source} global file ${resolution.decidingPath}`;
+}
+
+function renderBannerConfigReport(resolution: BannerResolution, writeTarget?: string): { message: string; type: "info" | "warning" } {
+  const config = resolution.config;
+  const lines = [
+    `Startup banner: rose=${config.showRose ? "on" : "off"}, text logo=${config.showTextLogo ? "on" : "off"}, color=${config.color}`,
+    `Source: ${describeBannerSource(resolution)}.`,
+  ];
+  const shadow = resolution.shadowedLegacy;
+  const collision = shadow !== undefined && JSON.stringify(shadow.config) !== JSON.stringify(config);
+  if (shadow !== undefined) lines.push(
+    `Legacy file ${shadow.path} is shadowed and normalizes to ${collision ? "different" : "the same"} values.`,
+  );
+  const ineffective = writeTarget !== undefined && resolution.source === "canonical" && resolution.decidingPath !== writeTarget;
+  if (ineffective) lines.push(`Write to ${writeTarget} is ineffective because ${resolution.decidingPath} still wins.`);
+  else if (writeTarget !== undefined) lines.push(`Saved normalized banner config to ${writeTarget}.`, "Changes apply on the next startup banner render.");
+  return { message: lines.join("\n"), type: collision || ineffective ? "warning" : "info" };
+}
+
+async function readBannerConfig(): Promise<BannerConfig> {
+  return (await resolveBannerConfig()).config;
+}
+
+async function updateBannerConfig(ctx: any, config: BannerConfig): Promise<void> {
+  const target = await writeBannerConfig(config);
+  const report = renderBannerConfigReport(await resolveBannerConfig(), target);
+  ctx.ui.notify(report.message, report.type);
+}
+
+function notifyBannerCollision(ctx: any, resolution: BannerResolution): void {
+  if (resolution.shadowedLegacy === undefined) return;
+  const report = renderBannerConfigReport(resolution);
+  ctx.ui.notify(report.message, report.type);
+}
+
+export const __testing = {
+  normalizeBannerConfig,
+  resolveBannerConfig,
+  bannerWriteTarget,
+  writeBannerConfig,
+  renderBannerConfigReport,
+};
 
 function paletteColor(color: BannerColor, key: keyof typeof BANNER_PALETTES[BannerColor], text: string): string {
   const [r, g, b] = BANNER_PALETTES[color][key];
@@ -517,17 +600,6 @@ async function countPackageExtensions(packages: unknown[]): Promise<number> {
 }
 
 export default function (pi: ExtensionAPI) {
-  const notifyBannerConfig = (ctx: any, config: BannerConfig) => {
-    ctx.ui.notify(
-      [
-        `Startup banner: rose=${config.showRose ? "on" : "off"}, text logo=${config.showTextLogo ? "on" : "off"}, color=${config.color}`,
-        `Config: ${bannerConfigPath()}`,
-        "Changes apply on the next startup banner render.",
-      ].join("\n"),
-      "info",
-    );
-  };
-
   const registerBannerCommand = (suffix: string) => {
     registerCanonicalCommand(pi, suffix, {
       description: "Configure the Shevanio Pi startup banner.",
@@ -546,8 +618,7 @@ export default function (pi: ExtensionAPI) {
           if (!color) return;
           config.color = color as BannerColor;
         }
-        await writeBannerConfig(config);
-        notifyBannerConfig(ctx, config);
+        await updateBannerConfig(ctx, config);
       },
     });
   };
@@ -557,8 +628,7 @@ export default function (pi: ExtensionAPI) {
       handler: async (_args, ctx) => {
         const config = await readBannerConfig();
         config[key] = !config[key];
-        await writeBannerConfig(config);
-        notifyBannerConfig(ctx, config);
+        await updateBannerConfig(ctx, config);
       },
     });
   };
@@ -575,8 +645,7 @@ export default function (pi: ExtensionAPI) {
           if (!selected) return;
           config.color = selected as BannerColor;
         }
-        await writeBannerConfig(config);
-        notifyBannerConfig(ctx, config);
+        await updateBannerConfig(ctx, config);
       },
     });
   };
@@ -602,7 +671,9 @@ export default function (pi: ExtensionAPI) {
 
     process.stdout.write("\x1b[2J\x1b[3J\x1b[H");
 
-    const bannerConfig = await readBannerConfig();
+    const resolution = await resolveBannerConfig();
+    notifyBannerCollision(ctx, resolution);
+    const bannerConfig = resolution.config;
     const palette = BANNER_PALETTES[bannerConfig.color];
     const roseBase = padLines(normalizeAscii(ROSE_LARGE_RAW));
     const logoBase = padLines(TEXT_LOGO);

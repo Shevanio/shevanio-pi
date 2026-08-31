@@ -395,6 +395,17 @@ async function run() {
 		routed.length = 0;
 		await session.prompt("/shevanio-pi:background-subagents status");
 		assert.match(routed[0].message, new RegExp(`decided by canonical global file ${canonicalPolicyPath}`));
+		const canonicalBannerPath = join(canonicalConfigHome, "banner.json");
+		const legacyBannerPath = join(globalConfigHome, "banner.json");
+		const legacyBannerBytes = '{"showRose":false,"showTextLogo":false,"color":"green","unmanaged":"preserve"}\n';
+		await writeFile(legacyBannerPath, legacyBannerBytes);
+		routed.length = 0;
+		await session.prompt("/shevanio-pi:toggle-rose");
+		assert.equal(await readFile(canonicalBannerPath, "utf8"), '{\n  "showRose": true,\n  "showTextLogo": false,\n  "color": "green"\n}\n');
+		assert.equal(await readFile(legacyBannerPath, "utf8"), legacyBannerBytes);
+		assert.match(routed[0].message, new RegExp(`Source: canonical global file ${canonicalBannerPath}`));
+		await rm(canonicalBannerPath, { force: true });
+		await rm(legacyBannerPath, { force: true });
 		routed.length = 0;
 		await session.prompt("/shevanio-pi:status");
 		assert.equal(routed.length, 1, "canonical status must route exactly once without a warning");
@@ -819,22 +830,22 @@ async function run() {
 	try {
 		const ctx = createCtx(bannerCwd, true);
 		await commands.get("gentle:toggle-rose").handler("", ctx);
-		let bannerConfig = JSON.parse(await readFile(join(globalConfigHome, "banner.json"), "utf8"));
+		let bannerConfig = JSON.parse(await readFile(join(canonicalConfigHome, "banner.json"), "utf8"));
 		assert.equal(bannerConfig.showRose, false);
 		assert.equal(bannerConfig.showTextLogo, true);
 		assert.equal(bannerConfig.color, "pink");
 		await commands.get("gentle:toggle-text-logo").handler("", ctx);
-		bannerConfig = JSON.parse(await readFile(join(globalConfigHome, "banner.json"), "utf8"));
+		bannerConfig = JSON.parse(await readFile(join(canonicalConfigHome, "banner.json"), "utf8"));
 		assert.equal(bannerConfig.showTextLogo, false);
 		await commands.get("gentle:banner-color").handler("cyan", ctx);
-		bannerConfig = JSON.parse(await readFile(join(globalConfigHome, "banner.json"), "utf8"));
+		bannerConfig = JSON.parse(await readFile(join(canonicalConfigHome, "banner.json"), "utf8"));
 		assert.equal(bannerConfig.color, "cyan");
 		await commands.get("gentle:banner").handler("", ctx);
-		bannerConfig = JSON.parse(await readFile(join(globalConfigHome, "banner.json"), "utf8"));
+		bannerConfig = JSON.parse(await readFile(join(canonicalConfigHome, "banner.json"), "utf8"));
 		assert.equal(bannerConfig.showRose, true);
 	} finally {
 		await rm(bannerCwd, { recursive: true, force: true });
-		await rm(join(globalConfigHome, "banner.json"), { force: true });
+		await rm(join(canonicalConfigHome, "banner.json"), { force: true });
 	}
 
 	// issue-301: cancelling the color picker must be a no-op — no write,
@@ -845,7 +856,7 @@ async function run() {
 	// picker and treat its cancellation as a no-op.
 	const cancelPickerCwd = await tempWorkspace();
 	try {
-		const bannerConfigPath = join(globalConfigHome, "banner.json");
+		const bannerConfigPath = join(canonicalConfigHome, "banner.json");
 		const seeded = {
 			showRose: false,
 			showTextLogo: false,
@@ -904,7 +915,7 @@ async function run() {
 		assert.deepEqual(reparsed, seeded, "seeded non-default color must round-trip semantically");
 	} finally {
 		await rm(cancelPickerCwd, { recursive: true, force: true });
-		await rm(join(globalConfigHome, "banner.json"), { force: true });
+		await rm(join(canonicalConfigHome, "banner.json"), { force: true });
 	}
 
 	const noUiCwd = await tempWorkspace();
