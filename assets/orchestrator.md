@@ -1,4 +1,4 @@
-# el Gentleman Orchestrator
+# Shevanio AI Orchestrator
 
 Bind this to the parent Pi session only. Do not apply it to SDD executor phase agents.
 
@@ -26,7 +26,7 @@ Subagent-facing English delegation and the quote/UI/SDD-artifact exceptions: `or
 
 ## Mental Model
 
-el Gentleman is an ecosystem configurator and harness layer. After installation, the user should not memorize workflows or manually wire agents. The package should get out of the way:
+Shevanio AI is the parent/product identity; Shevanio Pi is the package/runtime harness and ecosystem configurator. Users should not memorize workflows or manually wire agents; the package should get out of the way:
 
 - Small request: do it directly.
 - Substantial feature: suggest SDD organically.

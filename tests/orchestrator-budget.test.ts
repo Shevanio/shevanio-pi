@@ -32,6 +32,8 @@ const REAL_ASSETS_DIR = join(REPO_ROOT, "assets");
 const FIXTURE_PATH = join(import.meta.dirname, "fixtures", "orchestrator.pre-diet.md");
 const BUDGET_BYTES = 8192;
 const MIN_CONTROLLED_LONG_ASSETS_ROOT_CHARS = 93;
+const PARENT_PACKAGE_MODEL = "Shevanio AI is the parent/product identity; Shevanio Pi is the package/runtime harness and ecosystem configurator.";
+const PROVIDER_SENTENCE = "Gentle AI dynamically supplies runtime-specific RDD instructions via generated Pi APPEND_SYSTEM composition. Follow only those exact native instructions; if absent or unsupported, this package does not invent or fall back.";
 
 const LAZY_ASSET_NAMES = [
 	"orchestrator.md",
@@ -160,7 +162,8 @@ const TARGET_FILE: Record<Target, string> = {
 // Line numbers below are 1-indexed against tests/fixtures/orchestrator.pre-diet.md
 // (frozen byte-identical copy of assets/orchestrator.md at 23,047 B / 312 lines).
 const DISPOSITION_MAP: DispositionRange[] = [
-	{ lines: [1, 4], target: "core", label: "Header + bind" },
+	{ lines: [1, 1], target: "replaced", label: "Legacy parent header replaced by Shevanio AI" },
+	{ lines: [3, 4], target: "core", label: "Parent bind" },
 	{ lines: [5, 8], target: "core", label: "Identity Contract" },
 	{ lines: [9, 13], target: "core", label: "Core Role" },
 	{ lines: [15, 15], target: "core", label: "Language Boundary heading" },
@@ -169,7 +172,9 @@ const DISPOSITION_MAP: DispositionRange[] = [
 	{ lines: [21, 21], target: "core", label: "Language Boundary LB3 (artifact language)" },
 	{ lines: [23, 23], target: "core", label: "Language Boundary LB4 (public comment language)" },
 	{ lines: [25, 29], target: "delegation", label: "Language Boundary LB5 (exceptions)" },
-	{ lines: [31, 40], target: "core", label: "Mental Model" },
+	{ lines: [31, 32], target: "core", label: "Mental Model heading" },
+	{ lines: [33, 33], target: "replaced", label: "Legacy identity model replaced by canonical parent/package roles" },
+	{ lines: [34, 40], target: "core", label: "Mental Model behavior" },
 	{ lines: [42, 42], target: "core", label: "Work Routing Ladder heading" },
 	{
 		lines: [44, 97],
@@ -331,8 +336,10 @@ test("core-alone: load-bearing direct-delegation tokens remain without lazy unio
 
 test("core-alone: dynamic Gentle AI ownership replaces package lifecycle instructions", () => {
 	const core = readRealAsset("orchestrator.md");
-	assert.match(core, /dynamically supplies runtime-specific RDD instructions via generated Pi APPEND_SYSTEM composition/);
-	assert.match(core, /if absent or unsupported, this package does not invent or fall back/);
+	assert.equal(core.split(PROVIDER_SENTENCE).length - 1, 1, "the provider-owned sentence must remain byte-exact and unique");
+	assert.ok(core.includes(PARENT_PACKAGE_MODEL));
+	assert.match(core, /^# Shevanio AI Orchestrator/m);
+	assert.doesNotMatch(core, /\bel Gentleman\b/);
 	assert.doesNotMatch(core, /start -> finalize -> validate/i);
 	assert.doesNotMatch(core, /receipt validation/i);
 });

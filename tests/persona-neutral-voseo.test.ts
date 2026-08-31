@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { __testing } from "../extensions/gentle-ai.ts";
 
+const SELF_DESCRIPTION = "I am Shevanio AI, the parent coding-agent identity in Shevanio Pi, a Pi package/runtime harness for controlled development. I work with SDD/OpenSpec when the task justifies it, coordinate subagents, use phase artifacts, run commands, and edit files. I am not a generic chatbot.";
+
 // These tests assert that the composed main-agent prompt (built by buildGentlePrompt)
 // does not encourage Rioplatense voseo in neutral mode, and does include the expected
-// voseo/Rioplatense markers in gentleman mode.
+// voseo/Rioplatense markers in shevanio-ai mode.
 
 test("neutral mode composed prompt does not instruct to use voseo", () => {
 	const prompt = __testing.buildGentlePrompt("neutral");
@@ -46,21 +48,21 @@ test("neutral mode composed prompt has no positive voseo/Rioplatense instruction
 	);
 });
 
-test("gentleman mode composed prompt contains voseo reference", () => {
-	const prompt = __testing.buildGentlePrompt("gentleman");
+test("shevanio-ai mode composed prompt contains voseo reference", () => {
+	const prompt = __testing.buildGentlePrompt("shevanio-ai");
 	assert.match(
 		prompt,
 		/voseo/i,
-		"gentleman prompt must reference voseo",
+		"shevanio-ai prompt must reference voseo",
 	);
 });
 
-test("gentleman mode composed prompt contains Rioplatense reference", () => {
-	const prompt = __testing.buildGentlePrompt("gentleman");
+test("shevanio-ai mode composed prompt contains Rioplatense reference", () => {
+	const prompt = __testing.buildGentlePrompt("shevanio-ai");
 	assert.match(
 		prompt,
 		/Rioplatense/i,
-		"gentleman prompt must reference Rioplatense",
+		"shevanio-ai prompt must reference Rioplatense",
 	);
 });
 
@@ -71,15 +73,19 @@ test("neutral mode composed prompt explicitly states active mode is neutral", ()
 		/Current persona mode: neutral/i,
 		"neutral prompt must state active mode is neutral",
 	);
+	assert.equal(prompt.split(SELF_DESCRIPTION).length - 1, 1);
+	assert.match(prompt, /## Shevanio AI Identity and Shevanio Pi Harness/);
+	assert.match(prompt, /## Work Routing Ladder/);
 });
 
-test("gentleman mode composed prompt explicitly states active mode is gentleman", () => {
-	const prompt = __testing.buildGentlePrompt("gentleman");
+test("shevanio-ai mode composed prompt explicitly states its canonical active mode", () => {
+	const prompt = __testing.buildGentlePrompt("shevanio-ai");
 	assert.match(
 		prompt,
-		/Current persona mode: gentleman/i,
-		"gentleman prompt must state active mode is gentleman",
+		/Current persona mode: shevanio-ai/i,
+		"canonical prompt must state active mode is shevanio-ai",
 	);
+	assert.equal(prompt.split(SELF_DESCRIPTION).length - 1, 1);
 });
 
 test("neutral mode composed prompt explicitly forbids voseo conjugations", () => {
@@ -92,15 +98,15 @@ test("neutral mode composed prompt explicitly forbids voseo conjugations", () =>
 	);
 });
 
-test("neutral and gentleman modes produce different language-boundary text", () => {
+test("neutral and shevanio-ai modes produce different language-boundary text", () => {
 	const neutralPrompt = __testing.buildGentlePrompt("neutral");
-	const gentlemanPrompt = __testing.buildGentlePrompt("gentleman");
+	const canonicalPrompt = __testing.buildGentlePrompt("shevanio-ai");
 
 	// The language-boundary section must differ between modes
 	assert.notEqual(
 		neutralPrompt,
-		gentlemanPrompt,
-		"neutral and gentleman prompts must differ",
+		canonicalPrompt,
+		"neutral and shevanio-ai prompts must differ",
 	);
 
 	// Neutral must not include a positive instruction to use Rioplatense
@@ -110,10 +116,10 @@ test("neutral and gentleman modes produce different language-boundary text", () 
 		"neutral prompt must not contain positive 'natural Rioplatense' language instruction",
 	);
 
-	// Gentleman must contain the Rioplatense instruction
+	// Canonical mode must contain the Rioplatense instruction
 	assert.match(
-		gentlemanPrompt,
+		canonicalPrompt,
 		/Language: natural Rioplatense/i,
-		"gentleman prompt must contain 'Language: natural Rioplatense' instruction",
+		"shevanio-ai prompt must contain 'Language: natural Rioplatense' instruction",
 	);
 });
