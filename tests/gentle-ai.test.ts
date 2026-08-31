@@ -238,7 +238,10 @@ test("session startup reports invalid project routing without mutating the profi
 	const warning = notifications.find((entry) => entry.message.includes(join(projectConfigDir, "models.json")));
 	assert.ok(warning, JSON.stringify(notifications));
 	assert.equal(warning!.severity, "warning");
-	assert.match(warning!.message, /skipped model config/);
+	assert.equal(
+		warning!.message,
+		`Shevanio Pi skipped model config because ${join(projectConfigDir, "models.json")} is invalid JSON or not an object. Fix or remove the file, then run /shevanio-pi:models again.`,
+	);
 	assert.equal(readFileSync(profilePath, "utf8"), before);
 });
 
@@ -516,6 +519,29 @@ test("delivery commands bypass RDD under every mode outcome while command safety
 	}
 });
 
+test("sensitive paths and destructive commands return exact Pi-owned safety messages", async () => {
+	type ToolCallHandler = (event: { toolName: string; input: unknown }, ctx: ExtensionContext) => Promise<ToolCallEventResult | undefined>;
+	const handlers = new Map<string, ToolCallHandler>();
+	const pi = {
+		on(name: string, handler: ToolCallHandler) { handlers.set(name, handler); },
+		events: { emit() {}, on() { return () => undefined; } },
+		registerCommand() {},
+		registerTool() {},
+	} as unknown as ExtensionAPI;
+	createGentleAiExtension({ nativeReviewCli: null })(pi);
+	const toolCall = handlers.get("tool_call")!;
+	const ctx = { cwd: process.cwd(), hasUI: false, ui: {} } as ExtensionContext;
+
+	assert.deepEqual(await toolCall({ toolName: "read", input: { path: "/home/test/.ssh/id_rsa" } }, ctx), {
+		block: true,
+		reason: "Shevanio Pi safety policy blocked access to sensitive path: /home/test/.ssh/id_rsa. Ask the user for an explicit safer plan.",
+	});
+	assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "rm -rf /" } }, ctx), {
+		block: true,
+		reason: "Shevanio Pi safety policy blocked a destructive shell command. Ask the user for an explicit safer plan.",
+	});
+});
+
 test("guarded command confirmation emits a generic correlated permission lifecycle", async () => {
 	type ToolCallHandler = (
 		event: { toolName: string; input: unknown },
@@ -593,7 +619,7 @@ test("guarded command confirmation emits a generic correlated permission lifecyc
 			requestId: deniedRequestId,
 			state: "waiting",
 			source: "tool_call",
-			message: "Gentle AI safety policy requires confirmation for this tool call.",
+			message: "Shevanio Pi safety policy requires confirmation for this tool call.",
 			toolName: "bash",
 		});
 		assert.equal(Object.keys(emitted[0].data).includes("command"), false);
@@ -603,7 +629,7 @@ test("guarded command confirmation emits a generic correlated permission lifecyc
 		resolveConfirmation(false);
 		assert.deepEqual(await denied, {
 			block: true,
-			reason: "Gentle AI safety policy blocked the command because it was not confirmed.",
+			reason: "Shevanio Pi safety policy blocked the command because it was not confirmed.",
 		});
 		assert.deepEqual(emitted[2], {
 			channel: "pi-permission-system:permission-request",
@@ -611,7 +637,7 @@ test("guarded command confirmation emits a generic correlated permission lifecyc
 				requestId: deniedRequestId,
 				state: "denied",
 				source: "tool_call",
-				message: "Gentle AI safety policy requires confirmation for this tool call.",
+				message: "Shevanio Pi safety policy requires confirmation for this tool call.",
 				toolName: "bash",
 			},
 		});
@@ -721,7 +747,7 @@ test("concurrent guarded confirmations coalesce the Herdr lifecycle per extensio
 		first.confirmations[0]!(false);
 		assert.deepEqual(await firstRequest, {
 			block: true,
-			reason: "Gentle AI safety policy blocked the command because it was not confirmed.",
+			reason: "Shevanio Pi safety policy blocked the command because it was not confirmed.",
 		});
 		assert.deepEqual(first.emitted.map(({ channel, data }) => ({ channel, state: data.state, active: data.active })), [
 			{ channel: "pi-permission-system:permission-request", state: "waiting", active: undefined },
@@ -993,7 +1019,7 @@ test("permission lifecycle is inactive for unguarded and headless commands", asy
 			ui: { confirm },
 		} as ExtensionContext), {
 			block: true,
-			reason: "Gentle AI safety policy requires interactive confirmation before this command.",
+			reason: "Shevanio Pi safety policy requires interactive confirmation before this command.",
 		});
 		assert.equal(confirmations, 0);
 		assert.deepEqual(emitted, []);

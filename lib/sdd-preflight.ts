@@ -758,7 +758,7 @@ export async function ensureSddPreflight(
 				: `Model-routed agents updated: ${modelResult.updated}`;
 			ctx.ui.notify(
 				[
-					"Gentle AI SDD preflight complete.",
+					"Shevanio Pi SDD preflight complete.",
 					`Mode: ${prefs.executionMode}`,
 					`Artifacts: ${prefs.artifactStore}`,
 					`Delivery strategy: ${prefs.chainedPrStrategy}`,

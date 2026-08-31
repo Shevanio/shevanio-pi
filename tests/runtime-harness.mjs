@@ -343,6 +343,7 @@ async function run() {
 		assert.equal(commands.has(name), false, `compat command should not be registered: ${name}`);
 	}
 	assert.ok(flags.has("no-skill-registry"), "missing no-skill-registry flag");
+	assert.equal(flags.get("no-skill-registry").description, "Skip the Shevanio Pi skill registry refresh and watcher on startup.");
 	assert.ok(hooks.has("session_start"), "missing session_start hook");
 	assert.ok(hooks.has("session_shutdown"), "missing session_shutdown hook");
 	assert.ok(hooks.has("input"), "missing input hook");
@@ -387,6 +388,7 @@ async function run() {
 		assert.equal(registered.some(({ invocationName }) => /:(?:1|2)$/.test(invocationName)), false);
 		for (const suffix of COMMAND_SUFFIXES) assert.ok(runner.getCommand(`gentle:${suffix}`).description.startsWith(deprecatedAliasNotice(suffix)));
 		assert.equal(runner.getCommand("shevanio-pi:persona").description, "Switch Shevanio AI persona between shevanio-ai and neutral.");
+		assert.equal(runner.getCommand("shevanio-pi:models").description, "Configure global per-agent models for Shevanio Pi.");
 		const registeredToolNames = runner.getAllRegisteredTools().map(({ definition }) => definition.name);
 		assert.deepEqual(registeredToolNames.filter((name) => name.startsWith("shevanio_review")).sort(), ["shevanio_review", "shevanio_review_capture", "shevanio_review_scope"]);
 		for (const name of ["gentle_review", "gentle_review_capture", "gentle_review_scope"]) assert.equal(registeredToolNames.includes(name), false, `legacy runtime review tool should not be registered: ${name}`);
@@ -1168,6 +1170,7 @@ async function run() {
 		assert.equal(existsSync(join(globalAgentHome, "gentle-ai", "support", "sdd-status-contract.md")), true);
 		assert.equal(existsSync(join(globalAgentHome, "chains", "sdd-full.chain.md")), true);
 		assert.equal(ctx.ui.selections.length, 0, "automatic SDD triggers must not render confirmation-only selectors");
+		assert.ok(ctx.ui.notifications.at(-1).message.startsWith("Shevanio Pi SDD preflight complete.\n"));
 		assert.match(ctx.ui.notifications.at(-1).message, /Preference source: canonical default or persisted preference/);
 		assert.deepEqual(
 			await inputHook({ text: "please use sdd for this change", source: "interactive" }, ctx),
@@ -1297,7 +1300,7 @@ async function run() {
 			/Work Routing Ladder/,
 			"SDD executor startup must not receive parent routing instructions",
 		);
-		assert.match(ctx.ui.notifications.at(-1).message, /SDD preflight complete/);
+		assert.ok(ctx.ui.notifications.at(-1).message.startsWith("Shevanio Pi SDD preflight complete.\n"));
 
 		const reusedPromptResult = await promptHook(
 			{
@@ -1500,7 +1503,7 @@ async function run() {
 		assert.equal(existsSync(join(globalAgentHome, "gentle-ai", "support", "sdd-status-contract.md")), true);
 		assert.equal(existsSync(join(globalAgentHome, "chains", "sdd-full.chain.md")), true);
 		assert.equal(ctx.ui.selections.length, 0, "sdd-init uses automatic preflight defaults");
-		assert.match(ctx.ui.notifications[0].message, /SDD preflight complete/);
+		assert.ok(ctx.ui.notifications[0].message.startsWith("Shevanio Pi SDD preflight complete.\n"));
 		assert.match(ctx.ui.notifications.at(-1).message, /Wrote openspec\/config\.yaml/);
 
 		await commands.get("gentle:sdd-preflight").handler("", ctx);
@@ -1547,6 +1550,10 @@ async function run() {
 		);
 		const legacyCtx = createCtx(legacyModelsCwd, true);
 		await hooks.get("session_start")[0]({ reason: "startup" }, legacyCtx);
+		assert.equal(
+			legacyCtx.ui.notifications.at(-1).message,
+			"Shevanio Pi applied SDD model config to 2 agent(s). Global SDD assets ready: 23 new agent(s), 4 new chain(s), 3 new support file(s).",
+		);
 		const legacyAgent = await readFile(
 			join(legacyModelsCwd, ".pi", "agents", "sdd-apply.md"),
 			"utf8",
@@ -1572,7 +1579,10 @@ async function run() {
 		assert.match(invalidGlobalSkippedAgent, /model: global\/provider-model/);
 		assert.doesNotMatch(invalidGlobalSkippedAgent, /model: legacy\/provider-model/);
 		assert.equal(legacyCtx.ui.notifications.at(-1).level, "warning");
-		assert.match(legacyCtx.ui.notifications.at(-1).message, /skipped model config/);
+		assert.equal(
+			legacyCtx.ui.notifications.at(-1).message,
+			`Shevanio Pi skipped model config because ${globalModelsPath} is invalid JSON or not an object. Fix or remove the file, then run /shevanio-pi:models again.`,
+		);
 		let modelPanelOpened = false;
 		legacyCtx.ui.custom = () => {
 			modelPanelOpened = true;
@@ -1582,7 +1592,10 @@ async function run() {
 		assert.equal(modelPanelOpened, false);
 		assert.equal(await readFile(globalModelsPath, "utf8"), "{ invalid json");
 		assert.equal(legacyCtx.ui.notifications.at(-1).level, "warning");
-		assert.match(legacyCtx.ui.notifications.at(-1).message, /cannot open model config/);
+		assert.equal(
+			legacyCtx.ui.notifications.at(-1).message,
+			`Shevanio Pi cannot open model config because ${globalModelsPath} is invalid JSON or not an object. Fix or remove the file, then run /shevanio-pi:models again.`,
+		);
 		await writeFile(globalModelsPath, JSON.stringify({}, null, 2));
 		await hooks.get("session_start")[0]({ reason: "startup" }, legacyCtx);
 		const emptyGlobalPreservesAgent = await readFile(
@@ -1628,6 +1641,21 @@ async function run() {
 	} finally {
 		await rm(legacyModelsCwd, { recursive: true, force: true });
 		await rm(globalModelsPath, { force: true });
+	}
+
+	const sweepFailureCwd = await tempWorkspace();
+	const validAgentHome = process.env.GENTLE_PI_AGENT_HOME;
+	try {
+		const invalidAgentHome = join(sweepFailureCwd, "agent-home-file");
+		await writeFile(invalidAgentHome, "not a directory\n");
+		process.env.GENTLE_PI_AGENT_HOME = invalidAgentHome;
+		const ctx = createCtx(sweepFailureCwd, true, "sweep-failure-session");
+		await hooks.get("session_start")[0]({ reason: "startup" }, ctx);
+		assert.equal(ctx.ui.notifications.at(-1).level, "warning");
+		assert.ok(ctx.ui.notifications.at(-1).message.startsWith("Shevanio Pi model config sweep failed: "));
+	} finally {
+		process.env.GENTLE_PI_AGENT_HOME = validAgentHome;
+		await rm(sweepFailureCwd, { recursive: true, force: true });
 	}
 
 	const staleSettingsOnlyCwd = await tempWorkspace();
@@ -1968,6 +1996,7 @@ async function run() {
 				},
 			});
 		await commands.get("gentle:models").handler("", ctx);
+		assert.equal(ctx.ui.notifications.at(-1).message.split("\n")[0], "Shevanio Pi global model config saved.");
 		assert.doesNotMatch(
 			ctx.ui.notifications.at(-1).message,
 			/[\u001b\u0007]/,
@@ -2104,6 +2133,8 @@ async function run() {
 			model: "custom/provider-model",
 			thinking: "medium",
 		});
+		const exportCount = Object.keys(exported.agents).length;
+		assert.equal(ctx.ui.notifications.at(-1).message, `Shevanio Pi exported ${exportCount} saved model routing entr${exportCount === 1 ? "y" : "ies"} to ${join(globalConfigHome, "models.export.json")}.`);
 
 		await writeFile(
 			join(globalConfigHome, "models.export.json"),
@@ -2128,6 +2159,12 @@ async function run() {
 		const restoredAgent = await readFile(join(modelsCwd, ".pi", "agents", "sdd-apply.md"), "utf8");
 		assert.match(restoredAgent, /model: restore\/provider/);
 		assert.match(restoredAgent, /thinking: high/);
+		assert.equal(ctx.ui.notifications.at(-1).message, [
+			"Shevanio Pi restored global model config.",
+			`Import: ${join(globalConfigHome, "models.export.json")}`,
+			`Global config: ${globalModelsPath}`,
+			"Agents updated: 2",
+		].join("\n"));
 
 		// issue #286: `thinking: "max"` must survive save normalization and
 		// reach both subagents.json (effort) and agent frontmatter (thinking).
