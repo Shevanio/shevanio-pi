@@ -246,11 +246,13 @@ test("rejects an unpinned transport capability", () => {
 });
 
 test("rejects an unsupported contract major", () => {
-	assertRejects(
-		withManifest(fixtureEntries(), (manifest) => {
+	const entries = withManifest(fixtureEntries(), (manifest) => {
 			manifest.contract_semver = "2.0.0";
-		}),
-		"unsupported provider contract major 2",
+	});
+	assert.throws(
+		() => verifyProviderContractBundleEntries(entries),
+		(error: unknown) => error instanceof Error
+			&& error.message === `${PROVIDER_CONTRACT_BUNDLE_INVALID}: unsupported provider contract major 2; shevanio-pi supports major 1 only`,
 	);
 });
 

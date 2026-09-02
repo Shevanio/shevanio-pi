@@ -260,7 +260,7 @@ test("runtime fails closed when the package-local binary is missing", async () =
 		() => resolveGentleAiBinary(packageRoot, "linux"),
 		(error: unknown) => error instanceof PackageLocalGentleAiBinaryMissingError
 			&& error.code === GENTLE_AI_BINARY_MISSING_CODE
-			&& error.message.includes("package-local-binary-missing"),
+			&& error.message === `${GENTLE_AI_BINARY_MISSING_CODE}: Gentle AI v${GENTLE_AI_VERSION} is not installed at ${join(packageRoot, ".gentle-ai", RUNTIME_DIRECTORY, "gentle-ai")}. Reinstall shevanio-pi, or use GENTLE_PI_SKIP_GENTLE_AI_INSTALL=1 only for development/offline installs.`,
 	);
 });
 

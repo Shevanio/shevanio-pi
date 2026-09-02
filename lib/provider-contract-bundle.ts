@@ -1,4 +1,4 @@
-// gentle-pi provider contract bundle verifier (gentle-pi#311 P1/P2).
+// shevanio-pi provider contract bundle verifier (gentle-pi#311 P1/P2).
 //
 // Consumes the data-only `gentle-ai-review-provider-contract-<semver>.tar.gz`
 // release bundle (or its extracted tree) and verifies it fail-closed before
@@ -31,10 +31,10 @@ export const PI_RUNTIME_IDENTITY = "pi";
 export const SUPPORTED_PROVIDER_CONTRACT_MAJOR = 1;
 // `runtimes` became part of the manifest in contract 1.1.0.
 export const RUNTIMES_REQUIRED_SINCE_MINOR = 1;
-// Exactly the provider roles gentle-pi supports, in the manifest's strict order.
+// Exactly the provider roles shevanio-pi supports, in the manifest's strict order.
 export const PROVIDER_CONTRACT_ROLE_IDS = ["lens", "refuter", "targeted-validator"] as const;
 // Every mandatory capability a role may declare. An unknown mandatory
-// capability means this gentle-pi build cannot satisfy the role: fail closed.
+// capability means this shevanio-pi build cannot satisfy the role: fail closed.
 export const KNOWN_MANDATORY_CAPABILITIES: readonly string[] = [PROVIDER_TRANSPORT_CAPABILITY];
 
 const MAX_ARCHIVE_BYTES = 8 * 1024 * 1024;
@@ -335,7 +335,7 @@ function parseManifest(payload: Buffer): ParsedManifest {
 	const minor = Number(semverMatch[2]);
 	const patch = Number(semverMatch[3]);
 	if (major !== SUPPORTED_PROVIDER_CONTRACT_MAJOR) {
-		invalid(`unsupported provider contract major ${major}; gentle-pi supports major ${SUPPORTED_PROVIDER_CONTRACT_MAJOR} only`);
+		invalid(`unsupported provider contract major ${major}; shevanio-pi supports major ${SUPPORTED_PROVIDER_CONTRACT_MAJOR} only`);
 	}
 	const transportCapability = requireString(object.transport_capability, "manifest.transport_capability");
 	if (transportCapability !== PROVIDER_TRANSPORT_CAPABILITY) {
