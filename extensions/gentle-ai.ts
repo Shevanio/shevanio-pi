@@ -1150,7 +1150,7 @@ function evaluateSensitivePathTool(
 	};
 }
 
-const ASK_USER_CHOICE_BLOCKED_EVENT = "gentle-pi:ask-user-choice:blocked";
+const ASK_USER_CHOICE_BLOCKED_EVENT = "shevanio-pi:ask-user-choice:blocked";
 
 const HERDR_BLOCKER_LABEL = {
 	CHOICE: "Choice awaiting input",

@@ -765,7 +765,7 @@ test("RPIV questionnaire blockers emit only a private, balanced Herdr projection
 	} as unknown as ExtensionAPI;
 	createGentleAiExtension({ nativeReviewCli: null })(pi);
 	assert.equal(eventHandlers.size, 2);
-	assert.equal(eventHandlers.has("gentle-pi:ask-user-choice:blocked"), true);
+	assert.equal(eventHandlers.has("shevanio-pi:ask-user-choice:blocked"), true);
 	assert.equal(eventHandlers.has("rpiv:ask-user:blocked"), true);
 
 	const source = {
@@ -896,7 +896,7 @@ test("closed choice blockers retain the visible choice label through guarded-con
 		events: {
 			emit(channel: string, data: unknown) {
 				if (channel === "herdr:blocked") herdrEvents.push(data as HerdrBlockedEvent);
-				if (channel === "gentle-pi:ask-user-choice:blocked") choiceEvents.push(data as { active: boolean });
+				if (channel === "shevanio-pi:ask-user-choice:blocked") choiceEvents.push(data as { active: boolean });
 				eventHandlers.get(channel)?.(data);
 			},
 			on(channel: string, handler: (data: unknown) => void) {
@@ -908,9 +908,9 @@ test("closed choice blockers retain the visible choice label through guarded-con
 		registerTool() {},
 	} as unknown as ExtensionAPI;
 	createGentleAiExtension({ nativeReviewCli: null })(pi);
-	assert.equal(eventHandlers.has("gentle-pi:ask-user-choice:blocked"), true);
+	assert.equal(eventHandlers.has("shevanio-pi:ask-user-choice:blocked"), true);
 
-	pi.events.emit("gentle-pi:ask-user-choice:blocked", { active: true });
+	pi.events.emit("shevanio-pi:ask-user-choice:blocked", { active: true });
 	assert.deepEqual(choiceEvents, [{ active: true }]);
 	assert.deepEqual(herdrEvents, [{ active: true, label: "Choice awaiting input" }]);
 
@@ -928,7 +928,7 @@ test("closed choice blockers retain the visible choice label through guarded-con
 	assert.equal(confirmations.length, 1);
 	assert.deepEqual(herdrEvents, [{ active: true, label: "Choice awaiting input" }]);
 
-	pi.events.emit("gentle-pi:ask-user-choice:blocked", { active: false });
+	pi.events.emit("shevanio-pi:ask-user-choice:blocked", { active: false });
 	assert.deepEqual(choiceEvents, [{ active: true }, { active: false }]);
 	assert.deepEqual(herdrEvents, [
 		{ active: true, label: "Choice awaiting input" },
