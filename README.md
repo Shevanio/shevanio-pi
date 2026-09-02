@@ -469,19 +469,26 @@ Delegation contract:
 | `gentleman` | Senior architect, teacher, direct technical feedback, Rioplatense Spanish/voseo when the user writes Spanish. |
 | `neutral`   | Same discipline, warmer professional language, no regional expression.                                        |
 
-Saved globally at:
+Persona authority uses this precedence:
 
-```text
-~/.pi/gentle-ai/persona.json
+1. `.pi/shevanio-pi/persona.json` (project canonical)
+2. `.pi/gentle-ai/persona.json` (project legacy)
+3. `${SHEVANIO_PI_CONFIG_HOME:-~/.pi/shevanio-pi}/persona.json` (global canonical)
+4. `${GENTLE_PI_CONFIG_HOME:-~/.pi/gentle-ai}/persona.json` (global legacy)
+5. built-in `gentleman` presentation
+
+Canonical files contain only the schema and mode:
+
+```json
+{
+  "schema": "shevanio-pi.persona/v1",
+  "mode": "shevanio-ai"
+}
 ```
 
-A project can still override the global default with:
+The canonical modes are `shevanio-ai` and `neutral`; the picker temporarily displays `gentleman` and `neutral` until the identity migration completes. `/shevanio-pi:persona` and `/shevanio-pi:persona global` write only the canonical global target. `/shevanio-pi:persona project` writes only the canonical project file.
 
-```text
-.pi/gentle-ai/persona.json
-```
-
-`/shevanio-pi:persona` writes the global config and updates an existing project override when one is present, so the current project does not stay stale. Run `/reload` or start a new Pi session after switching persona.
+Legacy unversioned files accept `gentleman` (normalized to `shevanio-ai`) or `neutral` and are never rewritten. A present malformed or unreadable winning file fails closed to the built-in `gentleman` presentation without falling through. Distinct same-scope canonical and legacy files report whether their normalized values match or conflict. Run `/reload` or start a new Pi session after switching persona.
 
 ## Model and effort assignment
 

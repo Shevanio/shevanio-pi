@@ -707,9 +707,15 @@ async function pathExists(path: string): Promise<boolean> {
 	}
 }
 
-type PersonaMode = "gentleman" | "neutral";
+type PersonaMode = "shevanio-ai" | "neutral";
+type PersonaPresentationMode = "gentleman" | "neutral";
 
 const PERSONA_OPTIONS = ["gentleman", "neutral"] as const;
+
+// Temporary presentation adapter: config authority migrates before visible identity.
+function presentPersonaMode(mode: PersonaMode | "gentleman"): PersonaPresentationMode {
+	return mode === "neutral" ? "neutral" : "gentleman";
+}
 
 const GENTLEMAN_PERSONA_PROMPT = `Persona:
 - Be direct, technical, and concise.
@@ -731,19 +737,20 @@ const NEUTRAL_PERSONA_PROMPT = `Persona:
 - Correct errors directly, explain why, and show the better path.`;
 
 function buildGentlePrompt(
-	persona: PersonaMode,
+	persona: PersonaMode | "gentleman",
 	cwd: string = process.cwd(),
 	activeTools?: readonly string[],
 ): string {
+	const presentedPersona = presentPersonaMode(persona);
 	const personaPrompt =
-		persona === "neutral" ? NEUTRAL_PERSONA_PROMPT : GENTLEMAN_PERSONA_PROMPT;
+		presentedPersona === "neutral" ? NEUTRAL_PERSONA_PROMPT : GENTLEMAN_PERSONA_PROMPT;
 	const languageBoundary =
-		persona === "neutral"
+		presentedPersona === "neutral"
 			? "Language: neutral/professional Spanish when the user writes Spanish. Do NOT use voseo or Rioplatense regional expressions."
 			: "Language: natural Rioplatense Spanish with voseo when the user writes Spanish.";
 	return `## el Gentleman Identity and Harness
 
-Current persona mode: ${persona}
+Current persona mode: ${presentedPersona}
 
 You are el Gentleman: a Pi-specific coding-agent harness for controlled development work.
 
@@ -1078,6 +1085,8 @@ function isNamedAgentStartEvent(event: unknown): boolean {
 	return readAgentStartNames(event).length > 0;
 }
 
+function shouldInjectPersona(event: unknown): boolean { return !isNamedAgentStartEvent(event) && !isSddAgentStartEvent(event); }
+
 function sddPhaseFromAgentStartEvent(event: unknown): SddPhase | undefined {
 	for (const name of readAgentStartNames(event)) {
 		if (name === "sdd-apply") return "apply";
@@ -1299,42 +1308,74 @@ function legacyProjectModelConfigPath(cwd: string): string {
 	return join(cwd, ".pi", "gentle-ai", "models.json");
 }
 
-function projectPersonaConfigPath(cwd: string): string {
-	return join(cwd, ".pi", "gentle-ai", "persona.json");
+const PERSONA_SCHEMA = "shevanio-pi.persona/v1";
+type PersonaSource = "canonical_project" | "legacy_project" | "canonical_global" | "legacy_global" | "built_in";
+interface PersonaOptions { env?: Record<string, string | undefined>; home?: string; read?: (path: string) => string }
+interface PersonaRow { source: PersonaSource; path: string; state: "valid" | "malformed"; mode?: PersonaMode }
+interface PersonaResolution { mode: PersonaMode; source: PersonaSource; decidingPath?: string; malformed: boolean; collision?: { canonical: PersonaRow; legacy: PersonaRow; equal: boolean } }
+
+function personaPaths(cwd: string, options: PersonaOptions = {}) {
+	const env = options.env ?? process.env, home = options.home ?? homedir();
+	return {
+		canonicalProject: resolve(cwd, ".pi", "shevanio-pi", "persona.json"),
+		legacyProject: resolve(cwd, ".pi", "gentle-ai", "persona.json"),
+		canonicalGlobal: resolve(env.SHEVANIO_PI_CONFIG_HOME ?? join(home, ".pi", "shevanio-pi"), "persona.json"),
+		legacyGlobal: resolve(env.GENTLE_PI_CONFIG_HOME ?? join(home, ".pi", "gentle-ai"), "persona.json"),
+	};
 }
 
-function personaConfigPath(_cwd: string): string {
-	return join(gentleAiConfigHome(), "persona.json");
+function parsePersonaDocument(raw: string, allowLegacy: boolean): PersonaMode | undefined {
+	let parsed: unknown;
+	try { parsed = JSON.parse(raw); } catch { return undefined; }
+	if (!isRecord(parsed)) return undefined;
+	if (parsed.schema === PERSONA_SCHEMA) return Object.keys(parsed).length === 2 && (parsed.mode === "shevanio-ai" || parsed.mode === "neutral") ? parsed.mode : undefined;
+	if (!allowLegacy || "schema" in parsed) return undefined;
+	return parsed.mode === "gentleman" ? "shevanio-ai" : parsed.mode === "neutral" ? "neutral" : undefined;
 }
 
-function readPersonaFile(path: string): PersonaMode | undefined {
-	if (!existsSync(path)) return undefined;
-	try {
-		const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
-		if (!isRecord(parsed)) return undefined;
-		return parsed.mode === "neutral" ? "neutral" : "gentleman";
-	} catch {
-		return undefined;
+function resolvePersonaConfig(cwd: string, options: PersonaOptions = {}): PersonaResolution {
+	const paths = personaPaths(cwd, options), read = options.read ?? ((path: string) => readFileSync(path, "utf8"));
+	const candidates: Array<[PersonaSource, string, boolean]> = [["canonical_project", paths.canonicalProject, false], ["legacy_project", paths.legacyProject, true], ["canonical_global", paths.canonicalGlobal, false], ["legacy_global", paths.legacyGlobal, true]];
+	const seen = new Set<string>(), rows: PersonaRow[] = [];
+	for (const [source, path, legacy] of candidates) {
+		if (seen.has(path)) continue;
+		seen.add(path);
+		try {
+			const mode = parsePersonaDocument(read(path), legacy);
+			rows.push(mode === undefined ? { source, path, state: "malformed" } : { source, path, state: "valid", mode });
+		} catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") rows.push({ source, path, state: "malformed" }); }
 	}
-}
-
-function readPersonaMode(cwd: string): PersonaMode {
-	return (
-		readPersonaFile(projectPersonaConfigPath(cwd)) ??
-		readPersonaFile(personaConfigPath(cwd)) ??
-		"gentleman"
-	);
-}
-
-function writePersonaMode(cwd: string, mode: PersonaMode): string[] {
-	const paths = [personaConfigPath(cwd)];
-	const projectPath = projectPersonaConfigPath(cwd);
-	if (existsSync(projectPath)) paths.push(projectPath);
-	for (const path of paths) {
-		mkdirSync(dirname(path), { recursive: true });
-		writeFileSync(path, `${JSON.stringify({ mode }, null, 2)}\n`);
+	const top = rows[0];
+	if (!top) return { mode: "shevanio-ai", source: "built_in", malformed: false };
+	const resolution: PersonaResolution = { mode: top.mode ?? "shevanio-ai", source: top.source, decidingPath: top.path, malformed: top.state === "malformed" };
+	if (top.state === "valid" && (top.source === "canonical_project" || top.source === "canonical_global")) {
+		const legacy = rows.find((row) => row.source === (top.source === "canonical_project" ? "legacy_project" : "legacy_global"));
+		if (legacy?.state === "valid") resolution.collision = { canonical: top, legacy, equal: top.mode === legacy.mode };
 	}
-	return paths;
+	return resolution;
+}
+
+function personaWriteTarget(cwd: string, scope: "global" | "project", options: PersonaOptions = {}): string {
+	if (scope === "project") return personaPaths(cwd, options).canonicalProject;
+	const env = options.env ?? process.env;
+	return resolve(env.SHEVANIO_PI_CONFIG_HOME ?? env.GENTLE_PI_CONFIG_HOME ?? join(options.home ?? homedir(), ".pi", "shevanio-pi"), "persona.json");
+}
+
+function writePersonaMode(cwd: string, mode: PersonaMode, scope: "global" | "project", options: PersonaOptions = {}) {
+	const path = personaWriteTarget(cwd, scope, options), content = `${JSON.stringify({ schema: PERSONA_SCHEMA, mode }, null, 2)}\n`;
+	try { if (readFileSync(path, "utf8") === content) return { path, changed: false }; } catch { /* create or replace the canonical target */ }
+	mkdirSync(dirname(path), { recursive: true });
+	writeFileSync(path, content);
+	return { path, changed: true };
+}
+
+function readPersonaMode(cwd: string): PersonaMode { return resolvePersonaConfig(cwd).mode; }
+
+function personaDiagnostics(resolution: PersonaResolution): { message: string; type: "info" | "warning" } | undefined {
+	if (resolution.malformed) return { message: `Persona config ${resolution.source} file ${resolution.decidingPath} is malformed or unreadable; using built-in shevanio-ai without fallback.`, type: "warning" };
+	if (!resolution.collision) return undefined;
+	const { canonical, legacy, equal } = resolution.collision;
+	return { message: `Persona ${equal ? "match" : "conflict"}: ${canonical.source} file ${canonical.path} and ${legacy.source} file ${legacy.path} normalize to ${equal ? "the same mode" : "different modes"}.`, type: equal ? "info" : "warning" };
 }
 
 function readSavedModelConfig(cwd: string): ModelConfigFileResult {
@@ -2538,24 +2579,31 @@ async function handleModelsCommand(ctx: ExtensionContext): Promise<void> {
 	);
 }
 
-async function handlePersonaCommand(ctx: ExtensionContext): Promise<void> {
-	const current = readPersonaMode(ctx.cwd);
+async function handlePersonaCommand(args: string, ctx: ExtensionContext): Promise<void> {
+	const requestedScope = args.trim() || "global";
+	if (requestedScope !== "global" && requestedScope !== "project") {
+		ctx.ui.notify(`Unknown persona scope: ${requestedScope}. Use global or project.`, "warning");
+		return;
+	}
+	const current = presentPersonaMode(readPersonaMode(ctx.cwd));
 	const selected = await ctx.ui.select(
 		`el Gentleman persona (current: ${current})`,
 		[...PERSONA_OPTIONS],
 	);
 	if (selected !== "gentleman" && selected !== "neutral") return;
-	const writtenPaths = writePersonaMode(ctx.cwd, selected);
+	const written = writePersonaMode(ctx.cwd, selected === "gentleman" ? "shevanio-ai" : "neutral", requestedScope);
+	const resolution = resolvePersonaConfig(ctx.cwd), diagnostics = personaDiagnostics(resolution);
+	const ineffective = resolution.decidingPath !== written.path;
 	ctx.ui.notify(
 		[
 			`el Gentleman persona set to: ${selected}`,
-			`Global config: ${personaConfigPath(ctx.cwd)}`,
-			...(writtenPaths.length > 1
-				? [`Project override updated: ${projectPersonaConfigPath(ctx.cwd)}`]
-				: []),
+			ineffective
+				? `Write to ${written.path} is ineffective because ${resolution.source} file ${resolution.decidingPath} still wins.`
+				: `${requestedScope === "global" ? "Global" : "Project"} config: ${written.path}`,
+			...(diagnostics ? [diagnostics.message] : []),
 			"Run /reload or start a new Pi session for already-injected prompts to refresh.",
 		].join("\n"),
-		"info",
+		ineffective || diagnostics?.type === "warning" ? "warning" : "info",
 	);
 }
 
@@ -5175,6 +5223,15 @@ export const __testing = {
 	classifyGuardedCommand,
 	loadRuntimeGuardrailsConfig,
 	buildGentlePrompt,
+	shouldInjectPersona,
+	presentPersonaMode,
+	parsePersonaDocument,
+	resolvePersonaConfig,
+	personaPaths,
+	personaWriteTarget,
+	writePersonaMode,
+	personaDiagnostics,
+	handlePersonaCommand,
 	nativeStatusUnsupported,
 	executeReviewControllerOperation,
 	executeReviewCaptureOperation,
@@ -5436,9 +5493,12 @@ function createGentleAiExtensionForTesting(
 				prefs?.artifactStore,
 			), phase)}`
 			: "";
-		const gentlePrompt = isNamedAgent || isSddAgent
-			? ""
-			: `\n\n${buildGentlePrompt(readPersonaMode(ctx.cwd), ctx.cwd, readActiveToolNames(pi))}`;
+		let gentlePrompt = "";
+		if (shouldInjectPersona(event)) {
+			const persona = resolvePersonaConfig(ctx.cwd), diagnostics = personaDiagnostics(persona);
+			if (diagnostics && ctx.hasUI) ctx.ui.notify(diagnostics.message, diagnostics.type);
+			gentlePrompt = `\n\n${buildGentlePrompt(persona.mode, ctx.cwd, readActiveToolNames(pi))}`;
+		}
 		return {
 			systemPrompt: `${event.systemPrompt}${gentlePrompt}${sddPrompt}${nativeStatusPrompt}`,
 		};
@@ -5542,8 +5602,8 @@ function createGentleAiExtensionForTesting(
 
 	registerCanonicalCommand(pi, "persona", {
 		description: "Switch el Gentleman persona between gentleman and neutral.",
-		handler: async (_args, ctx) => {
-			await handlePersonaCommand(ctx);
+		handler: async (args, ctx) => {
+			await handlePersonaCommand(args, ctx);
 		},
 	});
 
@@ -5747,7 +5807,7 @@ function createGentleAiExtensionForTesting(
 				[
 					"Shevanio Pi package is active.",
 					...(devBinary.state === "inactive" ? [] : [devBinary.line]),
-					`Persona: ${readPersonaMode(ctx.cwd)}`,
+					`Persona: ${presentPersonaMode(readPersonaMode(ctx.cwd))}`,
 					`Global SDD agents: ${agentsInstalled ? "installed" : "not installed"}`,
 					`Global SDD chains: ${chainsInstalled ? "installed" : "not installed"}`,
 					`Global SDD assets stale: ${staleSddAssets} file(s)${

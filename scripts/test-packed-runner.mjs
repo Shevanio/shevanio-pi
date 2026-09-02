@@ -64,7 +64,7 @@ try {
 	const suffixes = ["background-subagents", "banner", "banner-color", "dev-binary", "doctor", "install-sdd", "models", "persona", "review-mode", "sdd-preflight", "status", "toggle-rose", "toggle-text-logo"];
 	const runtimeCwd = join(temporary, "runtime-cwd"), runtimeAgentDir = join(temporary, "runtime-agent"), runtimeHome = join(temporary, "runtime-home");
 	for (const path of [runtimeCwd, runtimeAgentDir, runtimeHome]) mkdirSync(path);
-	Object.assign(process.env, { HOME: runtimeHome, USERPROFILE: runtimeHome, GENTLE_PI_CONFIG_HOME: join(runtimeHome, "config"), GENTLE_PI_AGENT_HOME: runtimeAgentDir, GENTLE_PI_NO_SKILL_REGISTRY: "1" });
+	Object.assign(process.env, { HOME: runtimeHome, USERPROFILE: runtimeHome, SHEVANIO_PI_CONFIG_HOME: join(runtimeHome, "shevanio-config"), GENTLE_PI_CONFIG_HOME: join(runtimeHome, "config"), GENTLE_PI_AGENT_HOME: runtimeAgentDir, GENTLE_PI_NO_SKILL_REGISTRY: "1", PI_OFFLINE: "1" });
 	process.chdir(runtimeCwd);
 	const loader = new DefaultResourceLoader({ cwd: runtimeCwd, agentDir: runtimeAgentDir, additionalExtensionPaths: ["ask-user-choice.ts", "codegraph-tools.ts", "gentle-ai.ts", "pi-pretty.ts", "quiet-tools.ts", "sdd-init.ts", "skill-registry.ts", "startup-banner.ts"].map((path) => join(packageRoot, "extensions", path)), noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true });
 	await loader.reload();
@@ -84,9 +84,21 @@ try {
 	const reviewTools = registeredToolNames.filter((name) => name.startsWith("shevanio_review")).sort();
 	if (JSON.stringify(reviewTools) !== JSON.stringify(["shevanio_review", "shevanio_review_capture", "shevanio_review_scope"])) throw new Error(`packed review tool identities changed: ${reviewTools.join(", ")}`);
 	for (const name of ["gentle_review", "gentle_review_capture", "gentle_review_scope"]) if (registeredToolNames.includes(name)) throw new Error(`packed legacy review tool must not be registered: ${name}`);
+	const choices = [];
+	runner.setUIContext({ ...runner.getUIContext(), notify() {}, async select(_label, options) { return choices.shift() ?? options[0]; } });
+	const canonicalGlobalPersona = join(process.env.SHEVANIO_PI_CONFIG_HOME, "persona.json"), legacyGlobalPersona = join(process.env.GENTLE_PI_CONFIG_HOME, "persona.json");
+	const canonicalProjectPersona = join(runtimeCwd, ".pi", "shevanio-pi", "persona.json"), legacyProjectPersona = join(runtimeCwd, ".pi", "gentle-ai", "persona.json");
+	const legacyGlobalBytes = '{"mode":"neutral","preserve":true}\n', legacyProjectBytes = '{"mode":"gentleman","preserve":true}\n';
+	mkdirSync(dirname(legacyGlobalPersona), { recursive: true }); writeFileSync(legacyGlobalPersona, legacyGlobalBytes);
+	choices.push("gentleman"); await session.prompt("/shevanio-pi:persona global");
+	if (readFileSync(canonicalGlobalPersona, "utf8") !== '{\n  "schema": "shevanio-pi.persona/v1",\n  "mode": "shevanio-ai"\n}\n' || readFileSync(legacyGlobalPersona, "utf8") !== legacyGlobalBytes) throw new Error("packed global persona authority failed");
+	mkdirSync(dirname(legacyProjectPersona), { recursive: true }); writeFileSync(legacyProjectPersona, legacyProjectBytes);
+	choices.push("neutral"); await session.prompt("/shevanio-pi:persona project");
+	const packedPrompt = await runner.emitBeforeAgentStart("packed persona", undefined, "BASE", {});
+	if (!/"mode": "neutral"/.test(readFileSync(canonicalProjectPersona, "utf8")) || readFileSync(legacyProjectPersona, "utf8") !== legacyProjectBytes || !/Current persona mode: neutral/.test(packedPrompt.systemPrompt)) throw new Error("packed project persona precedence failed");
 	await runner.emit({ type: "session_shutdown", reason: "quit" });
 	const packageManifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
-	process.stdout.write(`packed package E2E passed (shevanio-pi ${packageManifest.version ?? "unknown"}; 13 canonical commands + deprecated aliases; bundled Gentle AI contract fixture ${decoded.packageVersion ?? "unknown"}; provider install skipped)\n`);
+	process.stdout.write(`packed package E2E passed (shevanio-pi ${packageManifest.version ?? "unknown"}; 13 canonical commands + deprecated aliases; persona authority verified; bundled Gentle AI contract fixture ${decoded.packageVersion ?? "unknown"}; provider install skipped)\n`);
 } finally {
 	process.chdir(originalCwd);
 	rmSync(temporary, { recursive: true, force: true });

@@ -213,6 +213,7 @@ async function run() {
 	process.env.GENTLE_PI_AGENT_HOME = globalAgentHome;
 	process.env.GENTLE_PI_NO_SKILL_REGISTRY = "1";
 	process.env.GENTLE_PI_TEST_ASSETS_DIR = ambientTestAssetsDir;
+	process.env.PI_OFFLINE = "1";
 	const globalModelsPath = join(globalConfigHome, "models.json");
 	const globalSubagentsPath = join(globalAgentHome, "subagents.json");
 	const { pi, hooks, commands, flags, tools, emittedEvents } = createPi();
@@ -385,9 +386,23 @@ async function run() {
 		const registeredToolNames = runner.getAllRegisteredTools().map(({ definition }) => definition.name);
 		assert.deepEqual(registeredToolNames.filter((name) => name.startsWith("shevanio_review")).sort(), ["shevanio_review", "shevanio_review_capture", "shevanio_review_scope"]);
 		for (const name of ["gentle_review", "gentle_review_capture", "gentle_review_scope"]) assert.equal(registeredToolNames.includes(name), false, `legacy runtime review tool should not be registered: ${name}`);
-		const routed = [];
-		runner.setUIContext({ ...runner.getUIContext(), notify(message, type = "info") { routed.push({ message, type }); } });
-		const canonicalPolicyPath = join(canonicalConfigHome, "background-subagents.json");
+			const routed = [];
+			const personaSelections = [];
+			runner.setUIContext({ ...runner.getUIContext(), notify(message, type = "info") { routed.push({ message, type }); }, async select(_label, options) { return personaSelections.shift() ?? options[0]; } });
+			const canonicalPersonaGlobalPath = join(canonicalConfigHome, "persona.json"), legacyPersonaGlobalPath = join(globalConfigHome, "persona.json");
+			const canonicalPersonaProjectPath = join(runtimeCwd, ".pi", "shevanio-pi", "persona.json"), legacyPersonaProjectPath = join(runtimeCwd, ".pi", "gentle-ai", "persona.json");
+			const legacyPersonaGlobalBytes = '{"mode":"neutral","user":"preserve-global"}\n', legacyPersonaProjectBytes = '{"mode":"gentleman","user":"preserve-project"}\n';
+			await mkdir(dirname(legacyPersonaGlobalPath), { recursive: true }); await writeFile(legacyPersonaGlobalPath, legacyPersonaGlobalBytes);
+			personaSelections.push("gentleman"); await session.prompt("/shevanio-pi:persona global");
+			assert.equal(await readFile(canonicalPersonaGlobalPath, "utf8"), '{\n  "schema": "shevanio-pi.persona/v1",\n  "mode": "shevanio-ai"\n}\n');
+			assert.equal(await readFile(legacyPersonaGlobalPath, "utf8"), legacyPersonaGlobalBytes);
+			assert.ok(routed.at(-1).message.includes(canonicalPersonaGlobalPath) && routed.at(-1).message.includes(legacyPersonaGlobalPath), "runtime collision must name both global sources");
+			await mkdir(dirname(legacyPersonaProjectPath), { recursive: true }); await writeFile(legacyPersonaProjectPath, legacyPersonaProjectBytes);
+			personaSelections.push("neutral"); await session.prompt("/shevanio-pi:persona project");
+			assert.match(await readFile(canonicalPersonaProjectPath, "utf8"), /"mode": "neutral"/); assert.equal(await readFile(legacyPersonaProjectPath, "utf8"), legacyPersonaProjectBytes);
+			const personaStart = await runner.emitBeforeAgentStart("runtime persona", undefined, "BASE", {});
+			assert.match(personaStart.systemPrompt, /Current persona mode: neutral/, "canonical project persona must outrank all global sources");
+			const canonicalPolicyPath = join(canonicalConfigHome, "background-subagents.json");
 		const legacyPolicyPath = join(globalConfigHome, "background-subagents.json");
 		await session.prompt("/shevanio-pi:background-subagents enable");
 		assert.equal(await readFile(canonicalPolicyPath, "utf8"), '{\n  "schema": "shevanio-pi.background-subagents/v1",\n  "policy": "on"\n}\n');
@@ -460,8 +475,8 @@ async function run() {
 		delete process.env.GENTLE_PI_TEST_ASSETS_DIR;
 		await rm(ambientTestAssetsDir, { recursive: true, force: true });
 		await writeFile(
-			join(globalConfigHome, "persona.json"),
-			'{"mode":"neutral"}\n',
+			join(canonicalConfigHome, "persona.json"),
+			'{\n  "schema": "shevanio-pi.persona/v1",\n  "mode": "neutral"\n}\n',
 		);
 		const neutralPromptResult = await promptHook({ systemPrompt: "base" }, createCtx(promptCwd));
 		assert.match(neutralPromptResult.systemPrompt, /Do not use slang or regional expressions/);
@@ -494,14 +509,20 @@ async function run() {
 		personaCtx.ui.select = async () => "neutral";
 		await commands.get("gentle:persona").handler("", personaCtx);
 		assert.equal(
+			await readFile(join(canonicalConfigHome, "persona.json"), "utf8"),
+			'{\n  "schema": "shevanio-pi.persona/v1",\n  "mode": "neutral"\n}\n',
+		);
+		assert.equal(
 			await readFile(join(globalConfigHome, "persona.json"), "utf8"),
-			'{\n  "mode": "neutral"\n}\n',
+			'{"mode":"neutral","user":"preserve-global"}\n',
 		);
 		assert.equal(
 			await readFile(join(promptCwd, ".pi", "gentle-ai", "persona.json"), "utf8"),
-			'{\n  "mode": "neutral"\n}\n',
+			'{"mode":"gentleman"}\n',
 		);
-		assert.match(personaCtx.ui.notifications.at(-1).message, /Global config:/);
+		const personaNotice = personaCtx.ui.notifications.at(-1);
+		assert.equal(personaNotice.level, "warning");
+		assert.ok(personaNotice.message.includes(`ineffective because legacy_project file ${join(promptCwd, ".pi", "gentle-ai", "persona.json")} still wins.`));
 		const onboardCtx = createCtx(promptCwd, true, "sdd-onboard-session");
 		onboardCtx.ui.select = async (_label, options) => options[0];
 		const onboardPromptResult = await promptHook(
