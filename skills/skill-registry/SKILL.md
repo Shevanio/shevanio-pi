@@ -18,7 +18,8 @@ Use this skill after installing, removing, creating, moving, or renaming skills,
 - Always write `.atl/skill-registry.md` regardless of SDD persistence mode.
 - Save the registry to Engram as `topic_key: skill-registry` when available, with `capture_prompt: false`.
 - Skip `sdd-*`, `_shared`, and `skill-registry`; deduplicate by skill name, preferring project-level skills over user-level skills.
-- Add `.atl/` to `.gitignore` when possible unless explicitly disabled.
+- Write only `.atl/skill-registry.md` and `.atl/.skill-registry.cache.json`; never create or change `.gitignore`.
+- Treat `.pi/extensions/skill-registry.ts` as project-owned. Report its exact path and require the operator to remove or relocate it manually; never inspect, move, disable, rewrite, or delete it.
 
 ## Decision Gates
 
@@ -48,4 +49,3 @@ Return:
 ## References
 
 - `docs/skill-style-guide.md` — how skills should be authored before indexing.
-- `skills/_shared/skill-resolver.md` — how delegators use the index.
