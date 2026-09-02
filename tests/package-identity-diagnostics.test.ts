@@ -22,12 +22,34 @@ const canonicalLabels: Record<string, readonly string[]> = {
 	"skills/skill-creator/SKILL.md": ["packaged `shevanio-pi` skill"],
 };
 const stalePackageLabels = ["Reinstall gentle-pi", "gentle-pi does not implement", "gentle-pi provider contract bundle verifier", "roles gentle-pi supports", "this gentle-pi build", "gentle-pi supports major", "gentle-pi provider contract mirror", "until gentle-pi is reinstalled", "gentle-pi could not install", "field gentle-pi lacks", "gentle-pi negotiates", "`gentle-pi` projects", "gentle-pi is a Node.js", "part of `gentle-pi`", "packaged `gentle-pi` skill"];
+const managedAssetLabels: Record<string, readonly (readonly [canonical: string, stale: string])[]> = {
+	"assets/agents/gentle-ai-worker.md": [["You are the package-owned implementation writer for Shevanio AI.", "You are the package-owned implementation writer for Gentle AI."]],
+	"assets/agents/jd-fix-agent.md": [["You are the Judgment Day fix agent for Shevanio AI.", "You are the Judgment Day fix agent for Gentle AI."]],
+	"assets/agents/jd-judge-a.md": [["You are Judgment Day judge A for Shevanio AI.", "You are Judgment Day judge A for Gentle AI."]],
+	"assets/agents/jd-judge-b.md": [["You are Judgment Day judge B for Shevanio AI.", "You are Judgment Day judge B for Gentle AI."]],
+	...Object.fromEntries(["apply", "archive", "design", "explore", "init", "onboard", "proposal", "research", "spec", "status", "sync", "tasks", "verify"].map((phase) => [`assets/agents/sdd-${phase}.md`, [[`You are the SDD ${phase} executor for Shevanio AI.`, `You are the SDD ${phase} executor for Gentle AI.`]]] as const)),
+	...Object.fromEntries(["readability", "reliability", "resilience", "risk"].map((lens) => [`assets/agents/review-${lens}.md`, [["through the Shevanio Pi host relay", "through the gentle-pi host relay"]]] as const)),
+	"assets/agents/sdd-apply.md": [["You are the SDD apply executor for Shevanio AI.", "You are the SDD apply executor for Gentle AI."], ["global Shevanio Pi strict-TDD support guidance", "global Gentle AI strict-TDD support guidance"]],
+	"assets/agents/sdd-verify.md": [["You are the SDD verify executor for Shevanio AI.", "You are the SDD verify executor for Gentle AI."], ["global Shevanio Pi strict-TDD verification support guidance", "global Gentle AI strict-TDD verification support guidance"]],
+	"assets/agents/sdd-spec.md": [["You are the SDD spec executor for Shevanio AI.", "You are the SDD spec executor for Gentle AI."], ["unsupported in Shevanio Pi until", "unsupported in gentle-pi until"]],
+	"assets/support/sdd-status-contract.md": [["contract for Shevanio Pi SDD phases", "contract for Gentle Pi SDD phases"], ["use Shevanio Pi's local SDD status engine", "use Gentle Pi's local SDD status engine"]],
+};
 
 test("current package-owned prose uses the canonical shevanio-pi identity", () => {
 	for (const [path, expected] of Object.entries(canonicalLabels)) {
 		const content = source(path);
 		for (const label of expected) assert.ok(content.includes(label), `${path} is missing ${JSON.stringify(label)}`);
 		for (const label of stalePackageLabels) assert.equal(content.includes(label), false, `${path} retains ${JSON.stringify(label)}`);
+	}
+});
+
+test("package-managed agent and support guidance uses ownership-safe identities", () => {
+	for (const [path, replacements] of Object.entries(managedAssetLabels)) {
+		const content = source(path);
+		for (const [canonical, stale] of replacements) {
+			assert.ok(content.includes(canonical), `${path} is missing ${JSON.stringify(canonical)}`);
+			assert.equal(content.includes(stale), false, `${path} retains ${JSON.stringify(stale)}`);
+		}
 	}
 });
 

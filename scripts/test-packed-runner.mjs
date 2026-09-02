@@ -15,6 +15,13 @@ const installDirectory = join(temporary, "install");
 const SELF_DESCRIPTION = "I am Shevanio AI, the parent coding-agent identity in Shevanio Pi, a Pi package/runtime harness for controlled development. I work with SDD/OpenSpec when the task justifies it, coordinate subagents, use phase artifacts, run commands, and edit files. I am not a generic chatbot.";
 const PARENT_PACKAGE_MODEL = "Shevanio AI is the parent/product identity; Shevanio Pi is the package/runtime harness and ecosystem configurator.";
 const PROVIDER_SENTENCE = "Gentle AI dynamically supplies runtime-specific RDD instructions via generated Pi APPEND_SYSTEM composition. Follow only those exact native instructions; if absent or unsupported, this package does not invent or fall back.";
+const MANAGED_SPEAKER_AGENTS = {
+	"gentle-ai-worker.md": "You are the package-owned implementation writer",
+	"jd-fix-agent.md": "You are the Judgment Day fix agent",
+	"jd-judge-a.md": "You are Judgment Day judge A",
+	"jd-judge-b.md": "You are Judgment Day judge B",
+	...Object.fromEntries(["apply", "archive", "design", "explore", "init", "onboard", "proposal", "research", "spec", "status", "sync", "tasks", "verify"].map((phase) => [`sdd-${phase}.md`, `You are the SDD ${phase} executor`])),
+};
 
 function windowsNpmInvocation() {
 	const candidates = [];
@@ -51,11 +58,36 @@ try {
 	writeFileSync(join(installDirectory, "package.json"), JSON.stringify({ name: "shevanio-pi-packed-runner-test", private: true }), "utf8");
 	runNpm(["install", "--ignore-scripts=false", "--no-audit", "--no-fund", "--package-lock=false", "--omit=dev", "--legacy-peer-deps", tarball], {
 		cwd: installDirectory,
-		env: { ...process.env, GENTLE_PI_SKIP_GENTLE_AI_INSTALL: "1" },
+		env: { ...process.env, GENTLE_PI_SKIP_GENTLE_AI_INSTALL: "1", PI_OFFLINE: "1" },
 		stdio: "inherit",
 	});
 	const packageRoot = join(installDirectory, "node_modules", "shevanio-pi");
 	for (const path of ["lib/command-alias.ts", "extensions/startup-banner.ts"]) if (!existsSync(join(packageRoot, path))) throw new Error(`packed shevanio-pi is missing ${path}`);
+	const assertManagedAgentName = (file, source) => {
+		const expected = basename(file, ".md");
+		if (!new RegExp(`^name: ${expected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "m").test(source)) throw new Error(`packed managed agent ${file} changed frontmatter identity`);
+	};
+	for (const [file, introduction] of Object.entries(MANAGED_SPEAKER_AGENTS)) {
+		const source = readFileSync(join(packageRoot, "assets", "agents", file), "utf8");
+		if (!source.includes(`${introduction} for Shevanio AI.`) || source.includes(`${introduction} for Gentle AI.`)) throw new Error(`packed managed speaker ${file} has stale ownership wording`);
+		assertManagedAgentName(file, source);
+	}
+	for (const file of ["review-readability.md", "review-reliability.md", "review-resilience.md", "review-risk.md"]) {
+		const source = readFileSync(join(packageRoot, "assets", "agents", file), "utf8");
+		if (!source.includes("through the Shevanio Pi host relay") || source.includes("through the gentle-pi host relay")) throw new Error(`packed review lens ${file} has stale relay wording`);
+		assertManagedAgentName(file, source);
+	}
+	for (const [file, canonical, stale] of [
+		["sdd-apply.md", "global Shevanio Pi strict-TDD support guidance", "global Gentle AI strict-TDD support guidance"],
+		["sdd-verify.md", "global Shevanio Pi strict-TDD verification support guidance", "global Gentle AI strict-TDD verification support guidance"],
+		["sdd-spec.md", "unsupported in Shevanio Pi until", "unsupported in gentle-pi until"],
+	]) {
+		const source = readFileSync(join(packageRoot, "assets", "agents", file), "utf8");
+		if (!source.includes(canonical) || source.includes(stale)) throw new Error(`packed managed agent ${file} has stale package guidance`);
+	}
+	const packedStatusContract = readFileSync(join(packageRoot, "assets", "support", "sdd-status-contract.md"), "utf8");
+	for (const [canonical, stale] of [["contract for Shevanio Pi SDD phases", "contract for Gentle Pi SDD phases"], ["use Shevanio Pi's local SDD status engine", "use Gentle Pi's local SDD status engine"]]) if (!packedStatusContract.includes(canonical) || packedStatusContract.includes(stale)) throw new Error("packed status contract has stale package guidance");
+	for (const file of ["gentle-ai-explore.md", "gentle-ai-verify.md"]) assertManagedAgentName(file, readFileSync(join(packageRoot, "assets", "agents", file), "utf8"));
 	const capabilities = JSON.parse(readFileSync(join(packageRoot, "contracts", "review-integration", "v2", "fixtures", "capabilities.fixture.json"), "utf8"));
 	// Import the PACKED consumer's own decoder and exercise it against the bundled,
 	// byte-pinned capabilities fixture. This proves canonical package discovery and

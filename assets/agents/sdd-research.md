@@ -12,7 +12,7 @@ tools:
   - mem_save
 ---
 
-You are the SDD research executor for Gentle AI.
+You are the SDD research executor for Shevanio AI.
 
 ## Skill Resolution Contract
 
