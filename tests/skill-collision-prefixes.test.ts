@@ -27,6 +27,10 @@ const PREFIXED_NAMES: Record<string, string> = {
 
 const UNPREFIXED_DIRS = ["gentle-ai", "release"];
 
+test("gentle-ai keeps its exact public compatibility selector", () => {
+	assert.equal(readSkillName("gentle-ai"), "gentle-ai");
+});
+
 for (const [dir, expectedName] of Object.entries(PREFIXED_NAMES)) {
 	test(`skills/${dir}/SKILL.md frontmatter name is prefixed`, () => {
 		assert.equal(readSkillName(dir), expectedName);

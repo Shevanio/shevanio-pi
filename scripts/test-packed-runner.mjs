@@ -101,8 +101,12 @@ try {
 	const packedPrompt = await runner.emitBeforeAgentStart("packed persona", undefined, "BASE", {});
 	if (!/"mode": "neutral"/.test(readFileSync(canonicalProjectPersona, "utf8")) || readFileSync(legacyProjectPersona, "utf8") !== legacyProjectBytes || !/Current persona mode: neutral/.test(packedPrompt.systemPrompt)) throw new Error("packed project persona precedence failed");
 	const alwaysOnAsset = readFileSync(join(packageRoot, "assets", "orchestrator.md"), "utf8");
+	const lazyWorkflowAsset = readFileSync(join(packageRoot, "assets", "sdd-orchestrator-workflow.md"), "utf8");
+	const compatibilitySkill = readFileSync(join(packageRoot, "skills", "gentle-ai", "SKILL.md"), "utf8");
 	if (!packedPrompt.systemPrompt.includes(PARENT_PACKAGE_MODEL) || packedPrompt.systemPrompt.split(SELF_DESCRIPTION).length - 1 !== 1 || /\bel Gentleman\b/.test(packedPrompt.systemPrompt)) throw new Error("packed parent identity composition failed");
 	if (alwaysOnAsset.split(PROVIDER_SENTENCE).length - 1 !== 1 || /\bel Gentleman\b/.test(alwaysOnAsset)) throw new Error("packed always-on provider boundary failed");
+	if (!lazyWorkflowAsset.includes(PARENT_PACKAGE_MODEL) || /\bel Gentleman\b/.test(lazyWorkflowAsset)) throw new Error("packed lazy workflow identity failed");
+	if (!compatibilitySkill.includes(PARENT_PACKAGE_MODEL) || !/^name: gentle-ai$/m.test(compatibilitySkill) || /\bel Gentleman\b/.test(compatibilitySkill)) throw new Error("packed compatibility skill identity failed");
 	await runner.emit({ type: "session_shutdown", reason: "quit" });
 	const packageManifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
 	process.stdout.write(`packed package E2E passed (shevanio-pi ${packageManifest.version ?? "unknown"}; 13 canonical commands + deprecated aliases; persona authority verified; bundled Gentle AI contract fixture ${decoded.packageVersion ?? "unknown"}; provider install skipped)\n`);
