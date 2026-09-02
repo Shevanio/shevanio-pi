@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, join, relative, sep } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { SddArtifactStore } from "./sdd-status.ts";
@@ -47,12 +47,16 @@ export interface SddPreflightPreferences {
 	engramAvailable: boolean;
 	prompted: boolean;
 	sizeExceptionAccepted?: true;
+	preferenceSource?: "canonical-project" | "legacy-project" | "built-in-defaults";
+	preferencePath?: string;
+	diagnostics?: readonly { level: "info" | "warning"; message: string }[];
 }
 
 export interface SddPreflightResolutionOptions {
 	persisted?: Partial<SddPreflightPreferences>;
 	promptFields?: readonly SddPreflightField[];
 	acceptSizeException?: true;
+	explicitWrite?: true;
 }
 
 interface SddPreflightCallbacks {
@@ -97,6 +101,8 @@ export const DEFAULT_SDD_PREFLIGHT: SddPreflightPreferences = Object.freeze({
 
 const sddPreflightBySession = new Map<string, SddPreflightPreferences>();
 const sddPreflightInFlight = new Map<string, Promise<SddPreflightPreferences>>();
+const sddPreflightFallbackSessions = new WeakMap<object, string>();
+let sddPreflightFallbackSequence = 0;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -340,68 +346,79 @@ export function isPackageManagedSddAsset(
 }
 
 // ---------------------------------------------------------------------------
-// Durable store — survives restarts, resumed sessions, and non-SDD agent starts
+// Project preference authority — isolated from managed assets and global config
 // ---------------------------------------------------------------------------
 
 export function sddPreflightDiskPath(cwd: string): string {
-	return join(cwd, ".pi", "gentle-ai", "sdd-preflight.json");
+	return resolve(cwd, ".pi", "shevanio-pi", "sdd-preflight.json");
+}
+
+export function legacySddPreflightDiskPath(cwd: string): string {
+	return resolve(cwd, ".pi", "gentle-ai", "sdd-preflight.json");
+}
+
+function durablePreferences(value: Record<string, unknown>, legacy: boolean): SddPreflightPreferences | undefined {
+	const artifactStore = legacy ? normalizeSddArtifactStore(value.artifactStore) : isSddArtifactStore(value.artifactStore) ? value.artifactStore : undefined;
+	const strategy = legacy ? normalizeSddStrategySelection(value.chainedPrStrategy, false) : value.chainedPrStrategy === "ask-on-risk" || value.chainedPrStrategy === "auto-chain" || value.chainedPrStrategy === "single-pr" ? value.chainedPrStrategy : undefined;
+	if (!isSddExecutionMode(value.executionMode) || artifactStore === undefined || strategy === undefined || !Number.isSafeInteger(value.reviewBudgetLines) || (value.reviewBudgetLines as number) <= 0) return undefined;
+	return { executionMode: value.executionMode, artifactStore, chainedPrStrategy: strategy, reviewBudgetLines: value.reviewBudgetLines as number, engramAvailable: false, prompted: false };
+}
+
+function decodeSddPreflight(value: unknown, legacy: boolean): SddPreflightPreferences | undefined {
+	if (!isRecord(value)) return undefined;
+	if (value.schema !== undefined || !legacy) {
+		if (value.schema !== "shevanio-pi.sdd-preflight/v1" || Object.keys(value).sort().join("|") !== "artifactStore|chainedPrStrategy|executionMode|reviewBudgetLines|schema") return undefined;
+		return durablePreferences(value, false);
+	}
+	if (!["executionMode", "artifactStore", "chainedPrStrategy", "reviewBudgetLines", "engramAvailable", "prompted"].every((key) => key in value) || typeof value.engramAvailable !== "boolean" || typeof value.prompted !== "boolean") return undefined;
+	return durablePreferences(value, true);
+}
+
+function preferencePathIdentity(path: string): string {
+	let identity: string;
+	try { identity = realpathSync(path); } catch { identity = resolve(path); }
+	return process.platform === "win32" ? identity.toLowerCase() : identity;
+}
+
+function withPreferenceSource(prefs: SddPreflightPreferences, preferenceSource: NonNullable<SddPreflightPreferences["preferenceSource"]>, preferencePath?: string, diagnostics: NonNullable<SddPreflightPreferences["diagnostics"]> = []): SddPreflightPreferences {
+	return { ...prefs, preferenceSource, ...(preferencePath === undefined ? {} : { preferencePath }), ...(diagnostics.length === 0 ? {} : { diagnostics }) };
+}
+
+function readPreference(path: string, legacy: boolean): SddPreflightPreferences | undefined {
+	try { return decodeSddPreflight(JSON.parse(readFileSync(path, "utf8")), legacy); } catch { return undefined; }
 }
 
 export function readSddPreflightFromDisk(cwd: string): SddPreflightPreferences | undefined {
-	const path = sddPreflightDiskPath(cwd);
-	if (!existsSync(path)) return undefined;
-	try {
-		const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
-		if (!isRecord(parsed)) return undefined;
-		// Validate required fields to guard against stale/corrupt writes.
-		const { executionMode, artifactStore, chainedPrStrategy, reviewBudgetLines, engramAvailable, prompted } = parsed;
-		// Normalize before validating: a preflight file written before the
-		// dual-store rename carries "both", and discarding it would silently
-		// drop the operator's choice back to the default.
-		const canonicalArtifactStore = normalizeSddArtifactStore(artifactStore);
-		if (
-			!isSddExecutionMode(executionMode) ||
-			canonicalArtifactStore === undefined ||
-			typeof reviewBudgetLines !== "number" ||
-			!Number.isFinite(reviewBudgetLines) ||
-			reviewBudgetLines <= 0 ||
-			typeof engramAvailable !== "boolean" ||
-			typeof prompted !== "boolean"
-		) {
-			return undefined;
+	const canonicalPath = sddPreflightDiskPath(cwd), legacyPath = legacySddPreflightDiskPath(cwd);
+	if (existsSync(canonicalPath)) {
+		const canonical = readPreference(canonicalPath, false);
+		if (!canonical) return withPreferenceSource(DEFAULT_SDD_PREFLIGHT, "canonical-project", canonicalPath, [{ level: "warning", message: `Canonical project preference at ${canonicalPath} is unreadable or invalid; using built-in durable defaults without legacy fallback.` }]);
+		const diagnostics: NonNullable<SddPreflightPreferences["diagnostics"]> = [];
+		if (existsSync(legacyPath)) {
+			if (preferencePathIdentity(canonicalPath) === preferencePathIdentity(legacyPath)) diagnostics.push({ level: "info", message: `Canonical project preference ${canonicalPath} and legacy project preference ${legacyPath} resolve to the same path.` });
+			else {
+				const legacy = readPreference(legacyPath, true);
+				if (legacy) diagnostics.push({ level: JSON.stringify({ ...canonical, engramAvailable: false, prompted: false }) === JSON.stringify({ ...legacy, engramAvailable: false, prompted: false }) ? "info" : "warning", message: `Canonical project preference ${canonicalPath} and legacy project preference ${legacyPath} ${JSON.stringify({ ...canonical, engramAvailable: false, prompted: false }) === JSON.stringify({ ...legacy, engramAvailable: false, prompted: false }) ? "normalize to equal durable choices" : "conflict; canonical wins"}.` });
+			}
 		}
-		return {
-			executionMode,
-			artifactStore: canonicalArtifactStore,
-			chainedPrStrategy: normalizeSddChainedPrStrategy(chainedPrStrategy),
-			reviewBudgetLines: normalizeReviewBudgetValue(reviewBudgetLines) ?? DEFAULT_SDD_PREFLIGHT.reviewBudgetLines,
-			engramAvailable,
-			prompted,
-		};
-	} catch {
-		return undefined;
+		return withPreferenceSource(canonical, "canonical-project", canonicalPath, diagnostics);
 	}
+	if (!existsSync(legacyPath)) return undefined;
+	const legacy = readPreference(legacyPath, true);
+	return legacy
+		? withPreferenceSource(legacy, "legacy-project", legacyPath)
+		: withPreferenceSource(DEFAULT_SDD_PREFLIGHT, "legacy-project", legacyPath, [{ level: "warning", message: `Legacy project preference at ${legacyPath} is unreadable or invalid; using built-in durable defaults without rewriting it.` }]);
 }
 
-export function writeSddPreflightToDisk(cwd: string, prefs: SddPreflightPreferences): void {
+export function writeSddPreflightToDisk(cwd: string, prefs: SddPreflightPreferences): { status: "created" | "updated" | "unchanged" | "failed"; path: string; error?: string } {
+	const path = sddPreflightDiskPath(cwd), existed = existsSync(path);
+	const document = { schema: "shevanio-pi.sdd-preflight/v1", executionMode: isSddExecutionMode(prefs.executionMode) ? prefs.executionMode : DEFAULT_SDD_PREFLIGHT.executionMode, artifactStore: normalizeSddArtifactStore(prefs.artifactStore) ?? DEFAULT_SDD_PREFLIGHT.artifactStore, chainedPrStrategy: normalizeSddChainedPrStrategy(prefs.chainedPrStrategy), reviewBudgetLines: normalizeReviewBudgetValue(prefs.reviewBudgetLines) ?? DEFAULT_SDD_PREFLIGHT.reviewBudgetLines };
+	const bytes = `${JSON.stringify(document, null, 2)}\n`;
 	try {
-		const path = sddPreflightDiskPath(cwd);
-		const prompted = prefs.prompted === true;
-		const canonical: SddPreflightPreferences = {
-			executionMode: isSddExecutionMode(prefs.executionMode) ? prefs.executionMode : DEFAULT_SDD_PREFLIGHT.executionMode,
-			artifactStore: normalizeSddArtifactStore(prefs.artifactStore) ?? DEFAULT_SDD_PREFLIGHT.artifactStore,
-			chainedPrStrategy: normalizeSddChainedPrStrategy(prefs.chainedPrStrategy),
-			reviewBudgetLines:
-				normalizeReviewBudgetValue(prefs.reviewBudgetLines) ??
-				DEFAULT_SDD_PREFLIGHT.reviewBudgetLines,
-			engramAvailable: prefs.engramAvailable === true,
-			prompted,
-		};
-		mkdirSync(dirname(path), { recursive: true });
-		writeFileSync(path, JSON.stringify(canonical, null, 2));
-	} catch {
-		// Disk write failures are non-fatal; in-memory cache is the primary store
-	}
+		if (existed && readFileSync(path, "utf8") === bytes) return { status: "unchanged", path };
+		mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, bytes);
+		return { status: existed ? "updated" : "created", path };
+	} catch (error) { return { status: "failed", path, error: error instanceof Error ? error.message : String(error) }; }
 }
 
 function copyDirectoryFiles(
@@ -606,19 +623,25 @@ export function isSddPreflightTrigger(text: string): boolean {
 
 export function sddPreflightSessionKey(ctx: ExtensionContext): string {
 	const manager = (ctx as unknown as { sessionManager?: unknown }).sessionManager;
-	if (isRecord(manager)) {
+	let sessionIdentity: string | undefined;
+	try { if (isRecord(manager)) {
 		const getSessionFile = manager.getSessionFile;
 		if (typeof getSessionFile === "function") {
 			const value = getSessionFile.call(manager);
-			if (typeof value === "string" && value.length > 0) return value;
+			if (typeof value === "string" && value.length > 0) sessionIdentity = `file:${preferencePathIdentity(value)}`;
 		}
 		const getSessionId = manager.getSessionId;
-		if (typeof getSessionId === "function") {
+		if (sessionIdentity === undefined && typeof getSessionId === "function") {
 			const value = getSessionId.call(manager);
-			if (typeof value === "string" && value.length > 0) return value;
+			if (typeof value === "string" && value.length > 0) sessionIdentity = `id:${value}`;
 		}
+	} } catch { /* Fall through to a registration-local identity. */ }
+	if (sessionIdentity === undefined) {
+		const owner = isRecord(manager) ? manager : ctx as object;
+		sessionIdentity = sddPreflightFallbackSessions.get(owner) ?? `fallback:${++sddPreflightFallbackSequence}`;
+		sddPreflightFallbackSessions.set(owner, sessionIdentity);
 	}
-	return ctx.cwd;
+	return `${preferencePathIdentity(sddPreflightDiskPath(ctx.cwd))}\0${sessionIdentity}`;
 }
 
 function hasWritableEngramTool(pi: ExtensionAPI): boolean {
@@ -646,11 +669,10 @@ export async function collectSddPreflightPreferences(
 	engramAvailable: boolean,
 	options: SddPreflightResolutionOptions = {},
 ): Promise<SddPreflightPreferences> {
-	const persistedPrompted = options.persisted?.prompted === true;
 	const allowExceptionOk = options.acceptSizeException === true;
 	const persisted = normalizedSelections(options.persisted, engramAvailable, allowExceptionOk);
 	const resolved: Partial<Record<SddPreflightField, unknown>> = { ...persisted };
-	let prompted = persistedPrompted;
+	let prompted = false;
 	let sizeExceptionAccepted = allowExceptionOk && persisted.chainedPrStrategy === "exception-ok";
 	const promptFields = new Set(options.promptFields ?? []);
 
@@ -691,6 +713,7 @@ export async function collectSddPreflightPreferences(
 		engramAvailable,
 		prompted,
 		...(sizeExceptionAccepted ? { sizeExceptionAccepted: true as const } : {}),
+		...(options.persisted?.preferenceSource === undefined ? {} : { preferenceSource: options.persisted.preferenceSource, ...(options.persisted.preferencePath === undefined ? {} : { preferencePath: options.persisted.preferencePath }), ...(options.persisted.diagnostics === undefined ? {} : { diagnostics: options.persisted.diagnostics }) }),
 	};
 }
 
@@ -734,17 +757,27 @@ export async function ensureSddPreflight(
 	resolutionOptions: SddPreflightResolutionOptions = {},
 ): Promise<SddPreflightPreferences> {
 	const sessionKey = sddPreflightSessionKey(ctx);
+	const bypassCache = resolutionOptions.explicitWrite === true;
 	const existing = sddPreflightBySession.get(sessionKey);
-	if (existing && !(resolutionOptions.promptFields?.length ?? 0)) return existing;
-	const inFlight = sddPreflightInFlight.get(sessionKey);
-	if (inFlight && !(resolutionOptions.promptFields?.length ?? 0)) return inFlight;
+	if (existing && !bypassCache) return existing;
+	const operationKey = bypassCache ? `${sessionKey}\0explicit` : sessionKey;
+	const inFlight = sddPreflightInFlight.get(operationKey);
+	if (inFlight) return inFlight;
 	const promise = (async () => {
 		const engramAvailable = hasWritableEngramTool(callbacks.pi);
-		const persisted = resolutionOptions.persisted ?? readSddPreflightFromDisk(ctx.cwd);
-		const prefs = await collectSddPreflightPreferences(ctx, engramAvailable, {
+		const persisted = resolutionOptions.persisted ?? readSddPreflightFromDisk(ctx.cwd) ?? withPreferenceSource(DEFAULT_SDD_PREFLIGHT, "built-in-defaults");
+		let prefs = await collectSddPreflightPreferences(ctx, engramAvailable, {
 			...resolutionOptions,
 			persisted,
 		});
+		const authorityPresent = persisted.preferenceSource === "canonical-project" || persisted.preferenceSource === "legacy-project";
+		const shouldWrite = bypassCache ? prefs.prompted : !authorityPresent;
+		const writeResult = shouldWrite ? writeSddPreflightToDisk(ctx.cwd, prefs) : undefined;
+		if (writeResult) {
+			const resolved = readSddPreflightFromDisk(ctx.cwd) ?? withPreferenceSource(DEFAULT_SDD_PREFLIGHT, "built-in-defaults");
+			const effective = await collectSddPreflightPreferences(ctx, engramAvailable, { persisted: resolved });
+			prefs = { ...effective, prompted: writeResult.status === "failed" ? false : prefs.prompted };
+		}
 		const result =
 			(await callbacks.installAssets?.(ctx.cwd)) ??
 			installSddAssets(ctx.cwd, false);
@@ -763,22 +796,23 @@ export async function ensureSddPreflight(
 					`Artifacts: ${prefs.artifactStore}`,
 					`Delivery strategy: ${prefs.chainedPrStrategy}`,
 					`Review budget: ${prefs.reviewBudgetLines} changed lines`,
-					`Preference source: ${prefs.prompted ? "explicit session choice" : "canonical default or persisted preference"}`,
+					`Preference source: ${prefs.preferenceSource ?? "built-in-defaults"}${prefs.preferencePath ? ` (${prefs.preferencePath})` : ""}`,
+					...(writeResult ? [`Preference write: ${writeResult.status} (${writeResult.path})${writeResult.error ? `: ${writeResult.error}` : ""}`] : []),
+					...(prefs.diagnostics ?? []).map(({ level, message }) => `${level === "warning" ? "Warning" : "Info"}: ${message}`),
 					`Global SDD assets ready: ${result.agents} agent(s), ${result.chains} chain(s), ${result.support} support file(s), ${result.skipped} already present.`,
 					modelRoutingLine,
 				].join("\n"),
-				modelResult.invalidPath ? "warning" : "info",
+				modelResult.invalidPath || writeResult?.status === "failed" || prefs.diagnostics?.some(({ level }) => level === "warning") ? "warning" : "info",
 			);
 		}
 		sddPreflightBySession.set(sessionKey, prefs);
-		writeSddPreflightToDisk(ctx.cwd, prefs);
 		return prefs;
 	})();
-	sddPreflightInFlight.set(sessionKey, promise);
+	sddPreflightInFlight.set(operationKey, promise);
 	try {
 		return await promise;
 	} finally {
-		sddPreflightInFlight.delete(sessionKey);
+		sddPreflightInFlight.delete(operationKey);
 	}
 }
 
@@ -787,12 +821,5 @@ export function getSddPreflightPreferences(
 ): SddPreflightPreferences | undefined {
 	const sessionKey = sddPreflightSessionKey(ctx);
 	const cached = sddPreflightBySession.get(sessionKey);
-	if (cached) return cached;
-	// Cache miss: check the durable disk store (survives restarts and non-SDD agent starts)
-	const persisted = readSddPreflightFromDisk(ctx.cwd);
-	if (persisted) {
-		sddPreflightBySession.set(sessionKey, persisted);
-		return persisted;
-	}
-	return undefined;
+	return cached;
 }

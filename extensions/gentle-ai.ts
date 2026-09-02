@@ -5414,8 +5414,8 @@ function createGentleAiExtensionForTesting(
 		},
 	});
 
-	function runSddPreflight(ctx: ExtensionContext, promptFields: readonly SddPreflightField[] = []): Promise<SddPreflightPreferences> {
-		return ensureSddPreflight(ctx, { pi, installAssets: (cwd) => installSddAssets(cwd, false), applyModelConfig: async () => applySavedModelConfig(ctx) }, { promptFields });
+	function runSddPreflight(ctx: ExtensionContext, promptFields: readonly SddPreflightField[] = [], explicitWrite = false): Promise<SddPreflightPreferences> {
+		return ensureSddPreflight(ctx, { pi, installAssets: (cwd) => installSddAssets(cwd, false), applyModelConfig: async () => applySavedModelConfig(ctx) }, { promptFields, ...(explicitWrite ? { explicitWrite: true } : {}) });
 	}
 
 	pi.on("session_start", async (_event, ctx) => {
@@ -5468,9 +5468,7 @@ function createGentleAiExtensionForTesting(
 	pi.on("before_agent_start", async (event, ctx) => {
 		const isSddAgent = isSddAgentStartEvent(event);
 		const isNamedAgent = isNamedAgentStartEvent(event);
-		if (isSddAgent && !getSddPreflightPreferences(ctx)) {
-			await runSddPreflight(ctx);
-		}
+		if (isSddAgent) await runSddPreflight(ctx);
 		const prefs = getSddPreflightPreferences(ctx);
 		const sddPrompt =
 			prefs && (!isNamedAgent || isSddAgent)
@@ -5539,7 +5537,7 @@ function createGentleAiExtensionForTesting(
 		description:
 			"Run or reuse the lazy SDD preflight for this Pi session.",
 		handler: async (_args, ctx) => {
-			await runSddPreflight(ctx, SDD_PREFLIGHT_FIELDS);
+			await runSddPreflight(ctx, SDD_PREFLIGHT_FIELDS, true);
 		},
 	});
 
