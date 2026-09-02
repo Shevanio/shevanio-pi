@@ -1,0 +1,28 @@
+name: Feature request
+description: Propose a focused improvement to shevanio-pi.
+title: "[Feature]: "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user or engineering problem needs to be solved?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe observable behavior, not only an implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What existing workflows or smaller changes have you considered?
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope and risks
+      description: Note compatibility, security, packaging, or migration concerns.

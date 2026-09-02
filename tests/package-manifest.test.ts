@@ -72,9 +72,11 @@ function sha256(content: string): string {
 
 interface PackageJsonPiManifest {
 	extensions?: string[];
+	image?: string;
 }
 
 interface PackageJson {
+	name?: string;
 	version?: string;
 	files?: string[];
 	scripts?: Record<string, string>;
@@ -97,6 +99,17 @@ function readPackageJson(): PackageJson {
 		throw new Error("package.json must contain valid JSON", { cause: error });
 	}
 }
+
+test("package manifest uses canonical public coordinates without an external image", () => {
+	const packageJson = readPackageJson();
+
+	assert.equal(packageJson.name, "shevanio-pi");
+	assert.deepEqual(packageJson.repository, {
+		type: "git",
+		url: "git+https://github.com/Shevanio/shevanio-pi.git",
+	});
+	assert.equal(packageJson.pi?.image, undefined);
+});
 
 test("package manifest has no obsolete native activation build surface", () => {
 	const packageJson = readPackageJson();
@@ -163,13 +176,15 @@ test("npm publication is bound to the exact package tag and triggering commit", 
 	assert.match(workflow, /id-token: write/, "trusted publishing requires OIDC");
 	assert.match(workflow, /node-version: "24"/, "trusted publishing must use a supported Node.js version");
 	assert.match(workflow, /const minimum = \[11, 5, 1\]/, "trusted publishing must reject npm versions below 11.5.1");
+	assert.match(workflow, /if: github\.repository == 'Shevanio\/shevanio-pi'/);
+	assert.match(workflow, /packageJson\.name !== "shevanio-pi"/);
 	assert.match(workflow, /packageJson\.repository\?\.type !== expectedRepository\.type/);
 	assert.match(workflow, /packageJson\.repository\?\.url !== expectedRepository\.url/);
 	assert.deepEqual(
 		packageJson.repository,
 		{
 			type: "git",
-			url: "git+https://github.com/Gentleman-Programming/gentle-pi.git",
+			url: "git+https://github.com/Shevanio/shevanio-pi.git",
 		},
 		"trusted publishing requires the exact case-sensitive npm repository identity",
 	);
@@ -210,7 +225,9 @@ test("generated runtime modules and packed-package checks are deterministic", ()
 	assert.match(packedRunner, /execFileSync\("where\.exe", \["npm"\]/);
 	assert.match(packedRunner, /could not resolve npm-cli\.js without a command shell/);
 	assert.doesNotMatch(packedRunner, /ComSpec|cmd\.exe/);
-	assert.match(packedRunner, /review", "capabilities", "--contract", "gentle-ai\.review-integration\/v2"/);
+	assert.match(packedRunner, /node_modules", "shevanio-pi"/);
+	assert.match(packedRunner, /GENTLE_PI_SKIP_GENTLE_AI_INSTALL: "1"/);
+	assert.doesNotMatch(packedRunner, /execFileSync\(executable/);
 	assert.doesNotMatch(packedRunner, /git-commit-transaction|transaction runner/i);
 });
 

@@ -1,8 +1,8 @@
-# Gentle AI review integration architecture
+# shevanio-pi review integration architecture
 
 ← [Back to README](../README.md)
 
-Gentle Pi is a transport consumer, not a review authority. Gentle AI generates the current runtime contract; the package forwards the bounded work it receives and preserves the provider's outcome.
+`shevanio-pi` is a transport consumer, not a review authority. Gentle AI generates the current runtime contract; the package forwards the bounded work it receives and preserves the provider's outcome.
 
 ## Ownership boundary
 
@@ -25,7 +25,7 @@ A typed Pi transport refusal fails closed. The coordinator reports the refusal w
 
 ## Dynamic contract delivery
 
-Package static assets intentionally omit lifecycle instructions, candidate routing, recovery procedures, receipt semantics, and any delivery-gate or delivery-authorization behavior. Gentle AI injects the current runtime-specific review contract through generated Pi APPEND_SYSTEM composition. The host follows only that generated review contract. When it is absent or the runtime is unsupported, Gentle Pi does not invent a fallback; delivery remains ordinary repository policy.
+Package static assets intentionally omit lifecycle instructions, candidate routing, recovery procedures, receipt semantics, and any delivery-gate or delivery-authorization behavior. Gentle AI injects the current runtime-specific review contract through generated Pi APPEND_SYSTEM composition. The host follows only that generated review contract. When it is absent or the runtime is unsupported, `shevanio-pi` does not invent a fallback; delivery remains ordinary repository policy.
 
 ## Integration constraints
 
