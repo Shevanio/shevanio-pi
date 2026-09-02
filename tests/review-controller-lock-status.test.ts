@@ -37,7 +37,7 @@ function runtime(nativeReviewCli: NativeReviewCli): RegisteredTool {
 		registerTool(definition: RegisteredTool & { name: string }) { tools.set(definition.name, definition); },
 		registerCommand() {},
 	} as unknown as ExtensionAPI);
-	const controller = tools.get("gentle_review");
+	const controller = tools.get("shevanio_review");
 	assert.ok(controller);
 	return controller;
 }

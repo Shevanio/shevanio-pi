@@ -63,11 +63,11 @@ function lifecycleContext(overrides: Record<string, unknown> = {}): Record<strin
 test("registered Gentle Review tools render reusable rose lifecycle call rows", () => {
 	const tools = registeredGentleTools();
 	const cases = [
-		["gentle_review", { operation: "status" }, "review status"],
-		["gentle_review", { operation: "future-operation", secret: "/private" }, "review"],
-		["gentle_review_scope", {}, "review scope"],
+		["shevanio_review", { operation: "status" }, "review status"],
+		["shevanio_review", { operation: "future-operation", secret: "/private" }, "review"],
+		["shevanio_review_scope", {}, "review scope"],
 		[
-			"gentle_review_capture",
+			"shevanio_review_capture",
 			{
 				lineageId: "lineage-id",
 				collectBinding: "binding-id",
@@ -81,8 +81,9 @@ test("registered Gentle Review tools render reusable rose lifecycle call rows", 
 
 	assert.deepEqual(
 		[...new Set(cases.map(([name]) => name))].sort(),
-		[...tools.keys()].filter((name) => name.startsWith("gentle_")).sort(),
+		[...tools.keys()].filter((name) => name.startsWith("shevanio_review")).sort(),
 	);
+	for (const name of ["gentle_review", "gentle_review_capture", "gentle_review_scope"]) assert.equal(tools.has(name), false, `${name} must not be registered`);
 
 	for (const [name, args, operationPath] of cases) {
 		const tool = tools.get(name);
@@ -124,7 +125,7 @@ test("registered Gentle Review tools render reusable rose lifecycle call rows", 
 
 test("registered Gentle Review tools preserve result envelopes and redact collapsed result rendering", async () => {
 	const tools = registeredGentleTools();
-	const scope = tools.get("gentle_review_scope");
+	const scope = tools.get("shevanio_review_scope");
 	const manifest = { version: 1, scopeByMode: { "100644": ["src/file.ts"] }, gitlinks: {} };
 	const bytes = Buffer.from(JSON.stringify(manifest), "utf8");
 	const encoded = gzipSync(bytes, { mtime: 0 }).toString("base64url");
@@ -149,7 +150,7 @@ test("registered Gentle Review tools preserve result envelopes and redact collap
 
 	const resultText = "safe result\x1b[31m\nlineage=secret body=private";
 	const expandHint = keyHint("app.tools.expand", "to expand");
-	for (const name of ["gentle_review", "gentle_review_scope", "gentle_review_capture"]) {
+	for (const name of ["shevanio_review", "shevanio_review_scope", "shevanio_review_capture"]) {
 		const tool = tools.get(name);
 		assert.equal(typeof tool?.renderResult, "function", `${name} must define result rendering`);
 		for (const options of [
@@ -307,8 +308,8 @@ test("ordinary native capture exposes a registered schema and STATUS binding cop
 	} as unknown as ExtensionAPI;
 	createGentleAiExtension({ nativeReviewCli: null })(pi);
 
-	assert.ok(tools.has("gentle_review_capture"));
-	assert.deepEqual(tools.get("gentle_review_capture")?.parameters.required, ["lineageId", "collectBinding"]);
+	assert.ok(tools.has("shevanio_review_capture"));
+	assert.deepEqual(tools.get("shevanio_review_capture")?.parameters.required, ["lineageId", "collectBinding"]);
 
 	const sha = `sha256:${"a".repeat(64)}`;
 	const lineageId = "ordinary-capture";

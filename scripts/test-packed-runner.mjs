@@ -80,8 +80,10 @@ try {
 	}
 	if (commands.some(({ invocationName }) => /:(?:1|2)$/.test(invocationName))) throw new Error("packed commands contain package-internal duplicate suffixes");
 	for (const name of ["sdd-status", "sdd-continue", "sdd-init", "skill-registry:refresh"]) if (commands.filter((command) => command.name === name && command.invocationName === name).length !== 1) throw new Error(`generic command ${name} changed`);
-	const reviewTools = runner.getAllRegisteredTools().map(({ definition }) => definition.name).filter((name) => name.startsWith("gentle_review")).sort();
-	if (JSON.stringify(reviewTools) !== JSON.stringify(["gentle_review", "gentle_review_capture", "gentle_review_scope"])) throw new Error(`packed review tool identities changed: ${reviewTools.join(", ")}`);
+	const registeredToolNames = runner.getAllRegisteredTools().map(({ definition }) => definition.name);
+	const reviewTools = registeredToolNames.filter((name) => name.startsWith("shevanio_review")).sort();
+	if (JSON.stringify(reviewTools) !== JSON.stringify(["shevanio_review", "shevanio_review_capture", "shevanio_review_scope"])) throw new Error(`packed review tool identities changed: ${reviewTools.join(", ")}`);
+	for (const name of ["gentle_review", "gentle_review_capture", "gentle_review_scope"]) if (registeredToolNames.includes(name)) throw new Error(`packed legacy review tool must not be registered: ${name}`);
 	await runner.emit({ type: "session_shutdown", reason: "quit" });
 	const packageManifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
 	process.stdout.write(`packed package E2E passed (shevanio-pi ${packageManifest.version ?? "unknown"}; 13 canonical commands + deprecated aliases; bundled Gentle AI contract fixture ${decoded.packageVersion ?? "unknown"}; provider install skipped)\n`);

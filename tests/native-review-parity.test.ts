@@ -202,7 +202,7 @@ function parityRuntime(nativeReviewCli: NativeReviewCli | null, options: ParityR
 		registerTool(definition: RegisteredControllerTool & { name: string }) { tools.set(definition.name, definition); },
 		registerCommand(name: string, definition: RegisteredCommand) { commands.set(name, definition); },
 	} as unknown as ExtensionAPI);
-	const controller = tools.get("gentle_review");
+	const controller = tools.get("shevanio_review");
 	assert.ok(controller);
 	return { controller: controller!, commands, events };
 }

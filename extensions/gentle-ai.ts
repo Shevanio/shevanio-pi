@@ -2631,7 +2631,7 @@ const REVIEW_CONTROLLER_PARAMETERS = {
 		},
 		input: {
 			type: "string",
-			description: "A JSON-serialized object string, not a nested object. New native ordinary START uses {\"mode\":\"ordinary\"}; answer-consent uses exactly {\"consentBinding\":\"<opaque id>\",\"answer\":\"granted|declined\"}. Ordinary provider capture belongs only to gentle_review_capture. An explicit baseRef requires committedOnly: true and requests a committed range, while repository-local policyPath remains optional. Legacy controller input remains separate.",
+			description: "A JSON-serialized object string, not a nested object. New native ordinary START uses {\"mode\":\"ordinary\"}; answer-consent uses exactly {\"consentBinding\":\"<opaque id>\",\"answer\":\"granted|declined\"}. Ordinary provider capture belongs only to shevanio_review_capture. An explicit baseRef requires committedOnly: true and requests a committed range, while repository-local policyPath remains optional. Legacy controller input remains separate.",
 		},
 		outputPath: { type: "string", description: "Retired with legacy bundle export; ignored. Export returns legacy-operation-retired." },
 		inputPath: { type: "string", description: "Repository-local JSON input file for the separate legacy controller flow (alternative to input). Legacy bundle import is retired." },
@@ -3649,7 +3649,7 @@ function completeNativeStart(
 	};
 }
 
-function nativeOperationFailure(operation: ReviewControllerOperation | "gentle_review_capture", error: unknown): Record<string, unknown> {
+function nativeOperationFailure(operation: ReviewControllerOperation | "shevanio_review_capture", error: unknown): Record<string, unknown> {
 	const value = error as { mutationOutcome?: unknown; nextAction?: unknown; diagnostics?: unknown; auditRecord?: unknown; launchAttempted?: unknown; candidateViewPreNative?: unknown; failureEnvelope?: { raw?: unknown; mutationOutcome?: unknown; replayability?: unknown; nextAction?: unknown } };
 	if (isRecord(value.failureEnvelope) && isRecord(value.failureEnvelope.raw)) {
 		const mutationOutcome = value.failureEnvelope.mutationOutcome;
@@ -3975,7 +3975,7 @@ function mapLastEventClosure(
 		throw new CandidateViewError("last-event closure returned a different target", "last-event-closure-binding-drift");
 	}
 	return {
-		tool: "gentle_review_capture",
+		tool: "shevanio_review_capture",
 		status: "closed",
 		outcome: "native-last-event-closure",
 		closure: {
@@ -4031,13 +4031,13 @@ async function reconcileUnknownReviewCaptureFailure(
 	selections: Map<string, RetainedNativeStatusSelection>,
 	route: RetainedNativeCaptureRoute | undefined,
 ): Promise<Record<string, unknown>> {
-	const failure = nativeOperationFailure("gentle_review_capture", error);
+	const failure = nativeOperationFailure("shevanio_review_capture", error);
 	if (!nativeMutationRequiresStatus(error)) return failure;
 	try {
 		const status = await reconcileUnknownReviewLastEventCapture(nativeReviewCli, cwd, binding, route);
 		syncRetainedNativeStatusSelections(selections, cwd, status, route?.baseRef);
 		return {
-			tool: "gentle_review_capture",
+			tool: "shevanio_review_capture",
 			status: "reconciled",
 			outcome: "native-capture-outcome-unknown",
 			native_failure: failure,
@@ -4051,7 +4051,7 @@ async function reconcileUnknownReviewCaptureFailure(
 		return {
 			...failure,
 			outcome: "native-capture-status-reconciliation-failed",
-			reconciliation_failure: nativeOperationFailure("gentle_review_capture", statusError),
+			reconciliation_failure: nativeOperationFailure("shevanio_review_capture", statusError),
 		};
 	}
 }
@@ -4082,7 +4082,7 @@ async function executeReviewHostRelayCapture(
 		const closure = decodeRelayLastEventClosure(result.submission);
 		if (closure !== undefined) return mapAndClearLastEventClosure(closure, binding, selections, cwd);
 		return {
-			tool: "gentle_review_capture",
+			tool: "shevanio_review_capture",
 			status: "captured",
 			outcome: "native-reviewer-result-captured",
 			lineage_id: binding.lineageId,
@@ -4101,7 +4101,7 @@ async function executeReviewHostRelayCapture(
 		if (error.mutationOutcome === "unknown") return await reconcileUnknownReviewCaptureFailure(error, nativeReviewCli, cwd, binding, selections, route);
 		if (error.kind === REVIEW_HOST_RELAY_FAILURE.RELAY_UNAVAILABLE) {
 			return {
-				tool: "gentle_review_capture",
+				tool: "shevanio_review_capture",
 				status: "blocked",
 				outcome: "pi-host-relay-unavailable",
 				reason: REVIEW_HOST_RELAY_UNAVAILABLE_MESSAGE,
@@ -4111,7 +4111,7 @@ async function executeReviewHostRelayCapture(
 		}
 		if (error.kind === REVIEW_HOST_RELAY_FAILURE.HANDSHAKE_REFUSED) {
 			return {
-				tool: "gentle_review_capture",
+				tool: "shevanio_review_capture",
 				status: "blocked",
 				outcome: "pi-host-relay-handshake-refused",
 				reason: error.message,
@@ -4121,7 +4121,7 @@ async function executeReviewHostRelayCapture(
 			};
 		}
 		return {
-			tool: "gentle_review_capture",
+			tool: "shevanio_review_capture",
 			status: "blocked",
 			outcome: error.kind === REVIEW_HOST_RELAY_FAILURE.PI_TIMED_OUT ? "pi-host-relay-timeout" : "pi-host-relay-transport-failure",
 			failure: reviewHostRelayFailureReport(error),
@@ -4149,7 +4149,7 @@ async function executeProviderRoleVectorCapture(
 ): Promise<Record<string, unknown>> {
 	if (nativeReviewCli.captureProviderRole === undefined) {
 		return {
-			tool: "gentle_review_capture",
+			tool: "shevanio_review_capture",
 			status: "blocked",
 			outcome: "provider-role-capture-unsupported",
 			reason: "The provider issued a self-contained role capture vector, but this runtime has no native provider-role capture surface.",
@@ -4166,7 +4166,7 @@ async function executeProviderRoleVectorCapture(
 		});
 		if ("operation" in artifact) return mapAndClearLastEventClosure(artifact, binding, selections, cwd);
 		return {
-			tool: "gentle_review_capture",
+			tool: "shevanio_review_capture",
 			status: "captured",
 			outcome: "native-provider-role-captured",
 			lineage_id: artifact.lineageId,
@@ -4247,11 +4247,11 @@ function clearReviewTransportProbeForTesting(nativeReviewCli: NativeReviewCli | 
 }
 
 function hostTransportUnavailable(
-	operation: ReviewControllerOperation | "gentle_review_capture",
+	operation: ReviewControllerOperation | "shevanio_review_capture",
 	transport: ReviewTransportRefusal,
 ): Record<string, unknown> {
 	return {
-		...(operation === "gentle_review_capture" ? { tool: operation } : { operation }),
+		...(operation === "shevanio_review_capture" ? { tool: operation } : { operation }),
 		status: "blocked",
 		outcome: "pi-host-relay-transport-unavailable",
 		reason: `The native provider refused the required pi reviewer transport (${transport.code}): ${transport.message}`,
@@ -4327,7 +4327,7 @@ function publicReviewCaptureBindings(status: ReviewStatusV3): readonly PublicRev
 
 function captureBindingRejected(reason: string): Record<string, unknown> {
 	return {
-		tool: "gentle_review_capture",
+		tool: "shevanio_review_capture",
 		status: "blocked",
 		outcome: "capture-binding-rejected",
 		reason,
@@ -4403,7 +4403,7 @@ async function executeReviewCaptureOperation(
 	const parameters = parseReviewCaptureParameters(parametersValue);
 	if (nativeReviewCli === null || nativeReviewCli.targetStatus === undefined) {
 		return {
-			tool: "gentle_review_capture",
+			tool: "shevanio_review_capture",
 			status: "blocked",
 			outcome: "native-status-unsupported",
 			mutation_performed: false,
@@ -4425,10 +4425,10 @@ async function executeReviewCaptureOperation(
 			...readRetainedNativeUntrackedSelection(retainedUntrackedSelections, cwd, parameters.lineageId),
 			...(signal === undefined ? {} : { signal }),
 		}, retainedUntrackedSelections, cwd);
-		if (negotiated.transport !== undefined) return hostTransportUnavailable("gentle_review_capture", negotiated.transport);
+		if (negotiated.transport !== undefined) return hostTransportUnavailable("shevanio_review_capture", negotiated.transport);
 		status = negotiated.status!;
 	} catch (error) {
-		return nativeOperationFailure("gentle_review_capture", error);
+		return nativeOperationFailure("shevanio_review_capture", error);
 	}
 	const selected = selectExactReviewCapture(status, parameters.lineageId, canonicalBinding);
 	if (!isSelectedReviewCapture(selected)) return selected;
@@ -4438,7 +4438,7 @@ async function executeReviewCaptureOperation(
 		if (parameters.correctionLines !== undefined) return captureBindingRejected("correctionLines is valid only for a correction-plan capture");
 		if (parameters.reviewerRunAcknowledged !== true) {
 			return {
-				tool: "gentle_review_capture",
+				tool: "shevanio_review_capture",
 				status: "blocked",
 				outcome: "reviewer-model-run-forecast",
 				cost_forecast: {
@@ -4460,7 +4460,7 @@ async function executeReviewCaptureOperation(
 		if (submission === undefined || value?.slot !== "correction_lines") return captureBindingRejected("provider correction-plan capture omitted its exact correction-lines binding");
 		if (parameters.correctionLines === undefined) {
 			return {
-				tool: "gentle_review_capture",
+				tool: "shevanio_review_capture",
 				status: "blocked",
 				outcome: "correction-lines-required",
 				minimum: value.minimum ?? 1,
@@ -5259,7 +5259,7 @@ function createGentleAiExtensionForTesting(
 	});
 
 	pi.registerTool({
-		name: "gentle_review_scope",
+		name: "shevanio_review_scope",
 		label: "Gentle Review Scope",
 		description: "Read one bounded, integrity-checked page of the controller-owned frozen changed scope. This read-only tool never inspects the ambient or candidate tree.",
 		parameters: REVIEW_SCOPE_PARAMETERS,
@@ -5282,7 +5282,7 @@ function createGentleAiExtensionForTesting(
 	});
 
 	pi.registerTool({
-		name: "gentle_review_capture",
+		name: "shevanio_review_capture",
 		label: "Gentle Review Capture",
 		description: "Capture exactly one provider-issued ordinary native review collect slot. This is not a controller operation: it validates one opaque collect binding against current target-scoped STATUS, executes at most one capture, and never follows a transition.",
 		promptSnippet: "Use one exact current STATUS collectBinding for one ordinary native capture; call fresh STATUS before every additional capture.",
@@ -5322,19 +5322,19 @@ function createGentleAiExtensionForTesting(
 	});
 
 	pi.registerTool({
-		name: "gentle_review",
+		name: "shevanio_review",
 		label: "Gentle Review Controller",
 		description:
-			"Inspect and recover review authority and start native ordinary review. Ordinary capture is available only through the separate gentle_review_capture tool. Review outcomes never authorize delivery: commit, push, pull-request, and release commands follow ordinary repository policy. RESET/RECOVER remain destructive and are executed by the audited native CLI.",
-		promptSnippet: "Inspect authority, then start native ordinary review; use gentle_review_capture for one current collect slot",
+			"Inspect and recover review authority and start native ordinary review. Ordinary capture is available only through the separate shevanio_review_capture tool. Review outcomes never authorize delivery: commit, push, pull-request, and release commands follow ordinary repository policy. RESET/RECOVER remain destructive and are executed by the audited native CLI.",
+		promptSnippet: "Inspect authority, then start native ordinary review; use shevanio_review_capture for one current collect slot",
 		promptGuidelines: [
 			'Call {"operation":"inspect"} before START. New native ordinary START uses a JSON string such as "{\\"mode\\":\\"ordinary\\"}"; an explicit baseRef must be paired with committedOnly: true to request a committed range, while policyPath remains repository-local. policyHash is legacy compact-only. The controller derives lineage, Git/untracked scope, tier, lenses, authored lines, and budget.',
 			"Use RECONCILE_AUTHORITY only to quarantine one invalid native recovery successor. Supply exact predecessorLineage, expectedPredecessorRevision, successorLineage, expectedSuccessorRevision, actor, and reason values; Pi derives and displays the seven-line native authorization binding for fresh UI approval. The predecessor stays untouched, native returns the durable audit record, and Pi never falls back to RESET or RECOVER.",
 			"Use ABANDON or QUARANTINE_LEGACY only after an explicit user decision and with exact native inputs. ABANDON needs lineage, expectedRevision, snapshotIdentity, capturedLensResults, findingsPresent, evidenceRecordsPresent, actor, and reason; QUARANTINE_LEGACY accepts only the published malformed freeze-findings diagnostic/disposition. A dual reconciliation may supply only anomalies `unchanged_target,malformed_recovery_authorization` in that exact order. Use REPAIR_LEGACY_ALIAS only with lineage, actor, and reason: Pi freshly reads native inventory and derives repository, revision, diagnostic, disposition, and the exact eight-line binding before interactive approval. `review dispose-result` is unsupported pending design.",
-			"Lens, refuter, and validator verdicts are admitted natively, never Pi-authored. Use gentle_review_capture with exactly one current provider-owned collectBinding for ordinary native capture; it never follows another transition.",
+			"Lens, refuter, and validator verdicts are admitted natively, never Pi-authored. Use shevanio_review_capture with exactly one current provider-owned collectBinding for ordinary native capture; it never follows another transition.",
 			"For blocked-legacy or blocked-mixed, do not call START repeatedly. Explain invalidation, request explicit user authorization, then call RESET or RECOVER only after authorization. RESET and RECOVER_LOCK route to audited native `gentle-ai review reclaim`; only RESET carries the legacy repositoryId, commonDirHash, inventoryHash, and confirmation challenge. RECOVER routes to native `gentle-ai review recover` with exactly six inputs: predecessorLineage, expectedPredecessorRevision, successorLineage, disposition, actor, and reason. Never send RECOVER the reset challenge and never send it a maintainerAuthorization: Pi reads fresh native target status, pins the predecessor lineage, revision, provider-selected disposition, and target identity, derives the exact six-line native authorization binding, displays it for fresh UI approval, and re-reads status before mutating. Negotiated target status supplies the sole accepted recovery disposition, and a caller-supplied substitute is rejected. Treat a native-input-required envelope as a request for exact values, never as permission to invent them. After a committed native recovery record, INSPECT before any fresh ordinary START.",
-			"A consent-required START returns the complete provider envelope and an opaque consent_binding, then stops. The parent presents and localizes that envelope without changing machine tokens, commands, target IDs, or invocations. After one explicit human answer, call answer-consent exactly once with a JSON string containing only consentBinding and answer (`granted` or `declined`). A reported lineage_created false or pre-authority validation error proves no lineage was created. After ambiguous START output, the controller calls target-scoped native status once and returns only its declared action. An ambiguous gentle_review_capture outcome independently reconciles once and never replays the capture.",
-			"Use gentle_review only for native review authority operations; delivery commands follow ordinary repository policy.",
+			"A consent-required START returns the complete provider envelope and an opaque consent_binding, then stops. The parent presents and localizes that envelope without changing machine tokens, commands, target IDs, or invocations. After one explicit human answer, call answer-consent exactly once with a JSON string containing only consentBinding and answer (`granted` or `declined`). A reported lineage_created false or pre-authority validation error proves no lineage was created. After ambiguous START output, the controller calls target-scoped native status once and returns only its declared action. An ambiguous shevanio_review_capture outcome independently reconciles once and never replays the capture.",
+			"Use shevanio_review only for native review authority operations; delivery commands follow ordinary repository policy.",
 		],
 		parameters: REVIEW_CONTROLLER_PARAMETERS,
 		executionMode: "sequential",

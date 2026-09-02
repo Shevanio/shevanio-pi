@@ -90,7 +90,7 @@ function registerRuntime(): RuntimeRegistration {
 		registerCommand() {},
 	} as unknown as ExtensionAPI;
 	createGentleAiExtension({ nativeReviewCli: null })(pi);
-	const controller = tools.get("gentle_review");
+	const controller = tools.get("shevanio_review");
 	const toolCall = handlers.get("tool_call");
 	assert.ok(controller, "the supported review controller tool must be registered");
 	assert.ok(toolCall, "the lifecycle gate hook must be registered");
@@ -418,7 +418,7 @@ test("shipped controller fails closed while static prompts defer RDD lifecycle o
 
 	assert.match(toolContract, /native-input-required.*never.*invent/is);
 	assert.match(toolContract, /output.*lost|response.*lost|ambiguous.*START/is);
-	assert.match(toolContract, /ambiguous START output.*target-scoped native status.*declared action.*ambiguous gentle_review_capture.*never replays/is);
+	assert.match(toolContract, /ambiguous START output.*target-scoped native status.*declared action.*ambiguous shevanio_review_capture.*never replays/is);
 	assert.doesNotMatch(toolContract, /START throws.*lineage does not exist/is);
 
 	const boundary = "Gentle AI dynamically supplies runtime-specific RDD instructions via generated Pi APPEND_SYSTEM composition. Follow only those exact native instructions; if absent or unsupported, this package does not invent or fall back.";

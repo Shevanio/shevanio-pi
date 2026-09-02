@@ -298,7 +298,7 @@ function registeredController(nativeReviewCli: import("../lib/native-review-cli.
 		registerTool(definition: { name: string; execute: (toolCallId: string, params: unknown, signal: AbortSignal | undefined, onUpdate: undefined, ctx: ExtensionContext) => Promise<{ details?: unknown }> }) { tools.set(definition.name, definition); },
 		registerCommand() {},
 	} as unknown as ExtensionAPI);
-	const controller = tools.get("gentle_review");
+	const controller = tools.get("shevanio_review");
 	assert.ok(controller);
 	return controller;
 }

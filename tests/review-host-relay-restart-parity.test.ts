@@ -19,7 +19,7 @@ import test from "node:test";
 // module load of extensions/gentle-ai.ts. Module-level state and every closure
 // restart from scratch. The truthful restart protocol uses the public surface:
 //   1. Process A: INSPECT exposes one opaque collectBinding, which is copied
-//      unchanged to exactly one gentle_review_capture invocation. The relay
+//      unchanged to exactly one shevanio_review_capture invocation. The relay
 //      transport fails without capture or source/authority mutation.
 //   2. Process B (fresh): INSPECT queries fresh provider STATUS and exposes the
 //      pending opaque collectBinding; it invokes neither capture nor the relay.
@@ -236,7 +236,7 @@ test("a fresh controller process reoffers the exact public binding before one ca
 	assert.equal(failure.relayRequests.length, 1, "Process A observes exactly one pending slot");
 	assert.equal(failure.statusCalls.length, 2, "Process A performs INSPECT and the selected capture STATUS only");
 	assert.deepEqual(failure.statusCalls, [{ cwd }, { cwd, lineageId: LINEAGE }]);
-	assert.equal(failure.result.tool, "gentle_review_capture");
+	assert.equal(failure.result.tool, "shevanio_review_capture");
 	assert.equal(failure.result.status, "blocked");
 	assert.equal(failure.result.outcome, "pi-host-relay-transport-failure");
 	assert.deepEqual(failure.result.failure, { kind: "pi-failed", stage: "pi", exit_code: 4, timed_out: false });
@@ -271,7 +271,7 @@ test("a fresh controller process reoffers the exact public binding before one ca
 	assert.equal(relaunch.captureBinding, observedBinding, "Process C copies the exact reoffered binding");
 	assert.deepEqual(relaunch.relayRequests[0], observedRelayRequest, "the relay receives the same provider-owned slot after restart");
 	assert.deepEqual(relaunch.relayRequests[0].submission, providerSubmission(LINEAGE, LENS, ORDER));
-	assert.equal(relaunch.result.tool, "gentle_review_capture");
+	assert.equal(relaunch.result.tool, "shevanio_review_capture");
 	assert.equal(relaunch.result.status, "closed");
 	assert.equal(relaunch.result.outcome, "native-last-event-closure");
 	assert.equal(relaunch.result.closure.operation, "review/capture-result");
@@ -293,7 +293,7 @@ test("a fresh controller process reoffers the exact public binding before one ca
 	assert.equal(ambiguous.captureCalls, 1, "ambiguous capture is never replayed");
 	assert.equal(ambiguous.relayRequests.length, 1, "ambiguity does not relaunch the relay");
 	assert.deepEqual(ambiguous.statusCalls, [{ cwd }, { cwd, lineageId: LINEAGE }, { cwd, lineageId: LINEAGE }], "one capture STATUS plus one reconciliation STATUS");
-	assert.equal(ambiguous.result.tool, "gentle_review_capture");
+	assert.equal(ambiguous.result.tool, "shevanio_review_capture");
 	assert.equal(ambiguous.result.status, "reconciled");
 	assert.equal(ambiguous.result.outcome, "native-capture-outcome-unknown");
 });
