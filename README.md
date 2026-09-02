@@ -564,18 +564,21 @@ Background delegation is off unless you turn it on. The policy is user-owned: on
 /shevanio-pi:background-subagents disable   Write "off" to the global file.
 ```
 
-Four sources can decide the policy, and the first hit wins:
+Six configured sources can decide the policy, and the first hit wins. Project scope outranks identity generation, so a legacy project file beats a canonical global file:
 
-| Priority | Source                                            | Notes                                                        |
-| -------- | ------------------------------------------------- | ------------------------------------------------------------ |
-| 1        | `<cwd>/.pi/gentle-ai/background-subagents.json`   | Project file. Outranks everything, including a global write.  |
-| 2        | `<configHome>/background-subagents.json`          | Global file, written by `enable`/`disable`. `configHome` honors `GENTLE_PI_CONFIG_HOME` and defaults to `~/.pi/gentle-ai`. |
-| 3        | `GENTLE_PI_BACKGROUND_SUBAGENTS`                  | Exactly `on` or `off`. Any other value is ignored.            |
-| 4        | Built-in default                                  | `off`.                                                        |
+| Priority | Source | Notes |
+| -------- | ------ | ----- |
+| 1 | `<cwd>/.pi/shevanio-pi/background-subagents.json` | Canonical project file. |
+| 2 | `<cwd>/.pi/gentle-ai/background-subagents.json` | Legacy project file; read-only compatibility. |
+| 3 | `${SHEVANIO_PI_CONFIG_HOME:-~/.pi/shevanio-pi}/background-subagents.json` | Canonical global file. |
+| 4 | `${GENTLE_PI_CONFIG_HOME:-~/.pi/gentle-ai}/background-subagents.json` | Legacy global file; read-only compatibility. |
+| 5 | `SHEVANIO_PI_BACKGROUND_SUBAGENTS` | Canonical env; exactly `on` or `off`. |
+| 6 | `GENTLE_PI_BACKGROUND_SUBAGENTS` | Legacy env; exactly `on` or `off`. |
+| 7 | Built-in default | `off`; invalid env values are inert and fall through. |
 
-Both files use the strict shape `{"schema":"gentle-pi.background-subagents/v1","policy":"on"}`. A file that is present but malformed fails closed to `off` and is **not** skipped in favor of a lower-priority source, so a typo in the project file disables background subagents rather than silently handing the decision to the global file. The command reports that case as a warning instead of an ordinary `off`.
+Reads strictly accept canonical schema `shevanio-pi.background-subagents/v1` and legacy schema `gentle-pi.background-subagents/v1`; unknown schemas and malformed shapes are rejected. A present malformed file is authoritative, fails closed to `off`, and never falls through. Reads never create, copy, move, rewrite, merge, or delete either tree.
 
-Because the project file outranks the global one, `enable` still writes the global file but reports plainly when a project file keeps the effective policy unchanged. The resolved capability (`ready` or `absent`) reports whether `subagent_run` is actually callable in this session; a policy of `on` with capability `absent` means the subagents package is not installed.
+`enable` and `disable` write only canonical JSON to `SHEVANIO_PI_CONFIG_HOME ?? GENTLE_PI_CONFIG_HOME ?? ~/.pi/shevanio-pi`; an explicit legacy selector chooses the location but not the payload schema. Status names the deciding source/path and same-scope shadowed source. Conflicting canonical/legacy values warn; equal duplicates are informational. If both selectors resolve to one path, it is read once without a false collision. A project file that outranks a global write is reported truthfully. Capability (`ready` or `absent`) separately reports whether `subagent_run` is callable.
 
 Startup banner settings are global and default to the current pink rose + text logo. Supported color presets are `pink`, `cyan`, `yellow`, and `green`.
 

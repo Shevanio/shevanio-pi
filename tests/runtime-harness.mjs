@@ -202,11 +202,13 @@ async function loadExtensions(pi) {
 
 async function run() {
 	const isolatedHome = await tempWorkspace();
+	const canonicalConfigHome = await tempWorkspace();
 	const globalConfigHome = await tempWorkspace();
 	const globalAgentHome = await tempWorkspace();
 	const ambientTestAssetsDir = await tempWorkspace();
 	process.env.HOME = isolatedHome;
 	process.env.USERPROFILE = isolatedHome;
+	process.env.SHEVANIO_PI_CONFIG_HOME = canonicalConfigHome;
 	process.env.GENTLE_PI_CONFIG_HOME = globalConfigHome;
 	process.env.GENTLE_PI_AGENT_HOME = globalAgentHome;
 	process.env.GENTLE_PI_NO_SKILL_REGISTRY = "1";
@@ -385,6 +387,15 @@ async function run() {
 		for (const name of ["gentle_review", "gentle_review_capture", "gentle_review_scope"]) assert.equal(registeredToolNames.includes(name), false, `legacy runtime review tool should not be registered: ${name}`);
 		const routed = [];
 		runner.setUIContext({ ...runner.getUIContext(), notify(message, type = "info") { routed.push({ message, type }); } });
+		const canonicalPolicyPath = join(canonicalConfigHome, "background-subagents.json");
+		const legacyPolicyPath = join(globalConfigHome, "background-subagents.json");
+		await session.prompt("/shevanio-pi:background-subagents enable");
+		assert.equal(await readFile(canonicalPolicyPath, "utf8"), '{\n  "schema": "shevanio-pi.background-subagents/v1",\n  "policy": "on"\n}\n');
+		assert.equal(existsSync(legacyPolicyPath), false, "runtime enable must not write the distinct legacy home");
+		routed.length = 0;
+		await session.prompt("/shevanio-pi:background-subagents status");
+		assert.match(routed[0].message, new RegExp(`decided by canonical global file ${canonicalPolicyPath}`));
+		routed.length = 0;
 		await session.prompt("/shevanio-pi:status");
 		assert.equal(routed.length, 1, "canonical status must route exactly once without a warning");
 		const canonicalStatus = routed[0];
@@ -2122,6 +2133,7 @@ async function run() {
 		await rm(registryCwd, { recursive: true, force: true });
 	}
 	await rm(globalConfigHome, { recursive: true, force: true });
+	await rm(canonicalConfigHome, { recursive: true, force: true });
 	await rm(globalAgentHome, { recursive: true, force: true });
 	await rm(isolatedHome, { recursive: true, force: true });
 }
