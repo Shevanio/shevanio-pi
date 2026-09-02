@@ -450,7 +450,8 @@ It scans common roots such as:
 
 Behavior:
 
-- `.atl/` is added to `.gitignore` when needed;
+- the only managed project files are `.atl/skill-registry.md` and `.atl/.skill-registry.cache.json`; `.gitignore` is never created or changed;
+- an existing `.pi/extensions/skill-registry.ts` is left byte-exact and produces an interactive warning with its exact path; remove or relocate it manually to use only the packaged registry;
 - the registry refreshes on session start;
 - startup refresh is skipped when Pi starts with `--no-skills` / `-ns`, `--no-skill-registry`, or `GENTLE_PI_NO_SKILL_REGISTRY=1`;
 - `/skill-registry:refresh` forces regeneration;
@@ -570,7 +571,7 @@ Legacy string entries are still accepted and treated as `model`-only config.
 | `/sdd-init`                      | Initializes or refreshes `openspec/config.yaml` (openspec/both stores only). |
 | `/shevanio-pi:install-sdd`         | Repairs missing global SDD runtime assets without overwriting files. |
 | `/shevanio-pi:install-sdd --force` | Force-refreshes installed global SDD assets.                         |
-| `/skill-registry:refresh`        | Regenerates `.atl/skill-registry.md`.                               |
+| `/skill-registry:refresh`        | Regenerates the managed registry and fingerprint cache under `.atl/`. |
 | `/skill-creation`                | Creates or updates an LLM-first skill using the packaged `gentle-ai-skill-creator` contract and style guide. |
 
 Package-owned global SDD runtime assets are also refreshed automatically on session start when `shevanio-pi` changes. Project-local `.pi/agents` and `.pi/chains` remain manual overrides and are never overwritten by startup refresh.
