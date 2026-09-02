@@ -63,6 +63,11 @@ try {
 	});
 	const packageRoot = join(installDirectory, "node_modules", "shevanio-pi");
 	for (const path of ["lib/command-alias.ts", "extensions/startup-banner.ts"]) if (!existsSync(join(packageRoot, path))) throw new Error(`packed shevanio-pi is missing ${path}`);
+	const packedBranchSkill = readFileSync(join(packageRoot, "skills", "branch-pr", "SKILL.md"), "utf8");
+	if (!/^name: gentle-ai-branch-pr$/m.test(packedBranchSkill)) throw new Error("packed branch PR skill changed its compatibility selector");
+	if (!packedBranchSkill.includes('description: "Create Shevanio AI pull requests with issue-first checks. Trigger: creating, opening, or preparing PRs for review."')) throw new Error("packed branch PR skill description is not canonical");
+	if (packedBranchSkill.includes("Create Gentle AI pull requests with issue-first checks.")) throw new Error("packed branch PR skill retains the stale identity description");
+	if (!/^  author: gentleman-programming$/m.test(packedBranchSkill) || !packedBranchSkill.includes("Trigger: creating, opening, or preparing PRs for review.")) throw new Error("packed branch PR skill changed provenance or trigger metadata");
 	const assertManagedAgentName = (file, source) => {
 		const expected = basename(file, ".md");
 		if (!new RegExp(`^name: ${expected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "m").test(source)) throw new Error(`packed managed agent ${file} changed frontmatter identity`);
