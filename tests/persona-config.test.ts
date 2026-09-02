@@ -10,6 +10,9 @@ const canonical = (mode: "shevanio-ai" | "neutral") => `{"schema":"shevanio-pi.p
 const legacy = (mode: "gentleman" | "neutral", extra = "") => `{"mode":"${mode}"${extra}}`;
 const missing = () => Object.assign(new Error("missing"), { code: "ENOENT" });
 const reader = (files: Map<string, string | Error>) => (path: string) => { const value = files.get(path) ?? missing(); if (value instanceof Error) throw value; return value; };
+const selfDescription = "I am Shevanio AI, the parent coding-agent identity in Shevanio Pi, a Pi package/runtime harness for controlled development. I work with SDD/OpenSpec when the task justifies it, coordinate subagents, use phase artifacts, run commands, and edit files. I am not a generic chatbot.";
+const providerSentence = "Gentle AI dynamically supplies runtime-specific RDD instructions via generated Pi APPEND_SYSTEM composition. Follow only those exact native instructions; if absent or unsupported, this package does not invent or fall back.";
+const countOccurrences = (text: string, value: string) => text.split(value).length - 1;
 
 test("canonical decoding is exact while legacy decoding is tolerant and normalized", () => {
 	for (const [raw, allowLegacy, expected] of [
@@ -53,23 +56,31 @@ test("writes are canonical, scoped, idempotent, truthful, and never mutate legac
 	t.after(() => { for (const [key, value] of Object.entries(previous)) value === undefined ? delete process.env[key] : process.env[key] = value; rmSync(root, { recursive: true, force: true }); });
 	const paths = __testing.personaPaths(cwd), legacyProjectBytes = '{"mode":"neutral","user":"keep"}\n', legacyGlobalBytes = '{"mode":"gentleman","user":"keep"}\n';
 	for (const [path, bytes] of [[paths.legacyProject, legacyProjectBytes], [paths.legacyGlobal, legacyGlobalBytes]] as const) { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, bytes); }
-	const notices: Array<{ message: string; type: string }> = []; let picks = 0, selection: string | undefined;
-	const ctx = { cwd, hasUI: true, ui: { notify: (message: string, type: string) => notices.push({ message, type }), select: async () => (picks++, selection) } } as any;
+	const notices: Array<{ message: string; type: string }> = [], pickers: Array<{ label: string; options: string[] }> = []; let picks = 0, selection: string | undefined;
+	const ctx = { cwd, hasUI: true, ui: { notify: (message: string, type: string) => notices.push({ message, type }), select: async (label: string, options: string[]) => { picks++; pickers.push({ label, options }); return selection; } } } as any;
 	await __testing.handlePersonaCommand("bogus", ctx); assert.equal(picks, 0); assert.match(notices.pop()!.message, /Unknown persona scope/);
 	await __testing.handlePersonaCommand("", ctx); assert.equal(notices.length, 0); assert.equal(readFileSync(paths.legacyGlobal, "utf8"), legacyGlobalBytes);
-	selection = "gentleman"; await __testing.handlePersonaCommand("global", ctx);
+	assert.deepEqual(pickers.at(-1), { label: "Shevanio AI persona (current: neutral)", options: ["shevanio-ai", "neutral"] });
+	selection = "shevanio-ai"; await __testing.handlePersonaCommand("global", ctx);
 	assert.equal(readFileSync(paths.canonicalGlobal, "utf8"), '{\n  "schema": "shevanio-pi.persona/v1",\n  "mode": "shevanio-ai"\n}\n');
-	assert.match(notices.pop()!.message, /ineffective.*legacy_project/s); assert.equal(__testing.writePersonaMode(cwd, "shevanio-ai", "global").changed, false);
+	assert.match(notices.pop()!.message, /Shevanio AI persona set to: shevanio-ai[\s\S]*ineffective.*legacy_project/); assert.equal(__testing.writePersonaMode(cwd, "shevanio-ai", "global").changed, false);
 	selection = "neutral"; await __testing.handlePersonaCommand("project", ctx);
 	assert.match(readFileSync(paths.canonicalProject, "utf8"), /"mode": "neutral"/);
 	assert.equal(readFileSync(paths.legacyProject, "utf8"), legacyProjectBytes); assert.equal(readFileSync(paths.legacyGlobal, "utf8"), legacyGlobalBytes);
 	assert.equal(__testing.personaWriteTarget(cwd, "global", { env: { GENTLE_PI_CONFIG_HOME: legacyHome }, home: root }), join(legacyHome, "persona.json"));
 });
 
-test("temporary presentation keeps prompt identity frozen and exclusions intact", () => {
-	assert.equal(__testing.buildGentlePrompt("shevanio-ai"), __testing.buildGentlePrompt("gentleman"));
-	assert.match(__testing.buildGentlePrompt("neutral"), /## el Gentleman Identity and Harness[\s\S]*Current persona mode: neutral/);
+test("canonical presentation keeps parent identity, provider ownership, and exclusions intact", () => {
+	const canonicalPrompt = __testing.buildGentlePrompt("shevanio-ai"), neutralPrompt = __testing.buildGentlePrompt("neutral");
+	for (const [mode, prompt] of [["shevanio-ai", canonicalPrompt], ["neutral", neutralPrompt]] as const) {
+		assert.match(prompt, new RegExp(`## Shevanio AI Identity and Shevanio Pi Harness[\\s\\S]*Current persona mode: ${mode}`));
+		assert.equal(countOccurrences(prompt, selfDescription), 1);
+		assert.equal(countOccurrences(prompt, providerSentence), 1);
+		assert.match(prompt, /Shevanio AI is the parent\/product identity; Shevanio Pi is the package\/runtime harness and ecosystem configurator\./);
+		assert.doesNotMatch(prompt, /\bel Gentleman\b/);
+	}
 	assert.equal(__testing.shouldInjectPersona({}), true); assert.equal(__testing.shouldInjectPersona({ agentName: "worker" }), false); assert.equal(__testing.shouldInjectPersona({ agentName: "sdd-apply" }), false);
-	const orchestrator = readFileSync(join(import.meta.dirname, "..", "assets", "orchestrator.md"));
-	assert.equal(createHash("sha256").update(orchestrator).digest("hex"), "0656ec238387ed6c638a013b44039a14131f9b880cf8118de4778833f21c31be");
+	const orchestrator = readFileSync(join(import.meta.dirname, "..", "assets", "orchestrator.md"), "utf8");
+	assert.equal(countOccurrences(orchestrator, providerSentence), 1); assert.doesNotMatch(orchestrator, /\bel Gentleman\b/);
+	assert.equal(createHash("sha256").update(orchestrator).digest("hex"), "872391c0245d8f055e9d13fc0abc5038d423830b7431ada77ee8c390e9555d32");
 });

@@ -12,6 +12,9 @@ const originalCwd = process.cwd();
 const temporary = mkdtempSync(join(tmpdir(), "shevanio-pi-packed-runner-"));
 const packDirectory = join(temporary, "pack");
 const installDirectory = join(temporary, "install");
+const SELF_DESCRIPTION = "I am Shevanio AI, the parent coding-agent identity in Shevanio Pi, a Pi package/runtime harness for controlled development. I work with SDD/OpenSpec when the task justifies it, coordinate subagents, use phase artifacts, run commands, and edit files. I am not a generic chatbot.";
+const PARENT_PACKAGE_MODEL = "Shevanio AI is the parent/product identity; Shevanio Pi is the package/runtime harness and ecosystem configurator.";
+const PROVIDER_SENTENCE = "Gentle AI dynamically supplies runtime-specific RDD instructions via generated Pi APPEND_SYSTEM composition. Follow only those exact native instructions; if absent or unsupported, this package does not invent or fall back.";
 
 function windowsNpmInvocation() {
 	const candidates = [];
@@ -84,18 +87,22 @@ try {
 	const reviewTools = registeredToolNames.filter((name) => name.startsWith("shevanio_review")).sort();
 	if (JSON.stringify(reviewTools) !== JSON.stringify(["shevanio_review", "shevanio_review_capture", "shevanio_review_scope"])) throw new Error(`packed review tool identities changed: ${reviewTools.join(", ")}`);
 	for (const name of ["gentle_review", "gentle_review_capture", "gentle_review_scope"]) if (registeredToolNames.includes(name)) throw new Error(`packed legacy review tool must not be registered: ${name}`);
-	const choices = [];
-	runner.setUIContext({ ...runner.getUIContext(), notify() {}, async select(_label, options) { return choices.shift() ?? options[0]; } });
+	const choices = [], pickers = [];
+	runner.setUIContext({ ...runner.getUIContext(), notify() {}, async select(label, options) { pickers.push({ label, options }); return choices.shift() ?? options[0]; } });
 	const canonicalGlobalPersona = join(process.env.SHEVANIO_PI_CONFIG_HOME, "persona.json"), legacyGlobalPersona = join(process.env.GENTLE_PI_CONFIG_HOME, "persona.json");
 	const canonicalProjectPersona = join(runtimeCwd, ".pi", "shevanio-pi", "persona.json"), legacyProjectPersona = join(runtimeCwd, ".pi", "gentle-ai", "persona.json");
 	const legacyGlobalBytes = '{"mode":"neutral","preserve":true}\n', legacyProjectBytes = '{"mode":"gentleman","preserve":true}\n';
 	mkdirSync(dirname(legacyGlobalPersona), { recursive: true }); writeFileSync(legacyGlobalPersona, legacyGlobalBytes);
-	choices.push("gentleman"); await session.prompt("/shevanio-pi:persona global");
+	choices.push("shevanio-ai"); await session.prompt("/shevanio-pi:persona global");
+	if (JSON.stringify(pickers.at(-1)) !== JSON.stringify({ label: "Shevanio AI persona (current: neutral)", options: ["shevanio-ai", "neutral"] })) throw new Error("packed persona picker is not canonical");
 	if (readFileSync(canonicalGlobalPersona, "utf8") !== '{\n  "schema": "shevanio-pi.persona/v1",\n  "mode": "shevanio-ai"\n}\n' || readFileSync(legacyGlobalPersona, "utf8") !== legacyGlobalBytes) throw new Error("packed global persona authority failed");
 	mkdirSync(dirname(legacyProjectPersona), { recursive: true }); writeFileSync(legacyProjectPersona, legacyProjectBytes);
 	choices.push("neutral"); await session.prompt("/shevanio-pi:persona project");
 	const packedPrompt = await runner.emitBeforeAgentStart("packed persona", undefined, "BASE", {});
 	if (!/"mode": "neutral"/.test(readFileSync(canonicalProjectPersona, "utf8")) || readFileSync(legacyProjectPersona, "utf8") !== legacyProjectBytes || !/Current persona mode: neutral/.test(packedPrompt.systemPrompt)) throw new Error("packed project persona precedence failed");
+	const alwaysOnAsset = readFileSync(join(packageRoot, "assets", "orchestrator.md"), "utf8");
+	if (!packedPrompt.systemPrompt.includes(PARENT_PACKAGE_MODEL) || packedPrompt.systemPrompt.split(SELF_DESCRIPTION).length - 1 !== 1 || /\bel Gentleman\b/.test(packedPrompt.systemPrompt)) throw new Error("packed parent identity composition failed");
+	if (alwaysOnAsset.split(PROVIDER_SENTENCE).length - 1 !== 1 || /\bel Gentleman\b/.test(alwaysOnAsset)) throw new Error("packed always-on provider boundary failed");
 	await runner.emit({ type: "session_shutdown", reason: "quit" });
 	const packageManifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
 	process.stdout.write(`packed package E2E passed (shevanio-pi ${packageManifest.version ?? "unknown"}; 13 canonical commands + deprecated aliases; persona authority verified; bundled Gentle AI contract fixture ${decoded.packageVersion ?? "unknown"}; provider install skipped)\n`);

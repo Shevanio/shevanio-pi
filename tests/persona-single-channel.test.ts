@@ -137,8 +137,8 @@ Exceptions:
 `;
 
 // ---------------------------------------------------------------------------
-// POST_* fixtures — exact text this change writes (design.md "Exact post-change
-// text"), frozen here so the apply commit and this test move together.
+// POST_* fixtures — frozen output of the prior single-channel migration. These
+// historical bytes remain unchanged during the parent-identity cutover.
 // ---------------------------------------------------------------------------
 
 /** design.md "Wrapper Identity contract" — replaces gentle-ai.ts :179-184 (817 B). */
@@ -236,40 +236,41 @@ test("fixture integrity: POST_WRAPPER_IDENTITY_BLOCK matches design.md converged
 // combined injection: __testing.buildGentlePrompt(persona).
 // ---------------------------------------------------------------------------
 
-test("Table A rule: wrapper :177 'You are el Gentleman...' survives verbatim (KEEP once, wrapper)", () => {
-	for (const persona of ["gentleman", "neutral"] as const) {
+test("live wrapper identifies the Shevanio AI parent and Shevanio Pi harness", () => {
+	for (const persona of ["shevanio-ai", "neutral"] as const) {
 		const prompt = __testing.buildGentlePrompt(persona);
 		assert.match(
 			prompt,
-			/You are el Gentleman: a Pi-specific coding-agent harness for controlled development work\./,
-			`[${persona}] wrapper :177 opening sentence must survive`,
+			/Shevanio AI is the parent\/product identity; Shevanio Pi is the package\/runtime harness and ecosystem configurator\./,
+			`[${persona}] parent and package roles must be explicit`,
 		);
+		assert.doesNotMatch(prompt, /\bel Gentleman\b/);
 	}
 });
 
-test("Table A rule: wrapper :180/:181 + orchestrator :9,:12 self-description MERGE into wrapper bullet 1", () => {
-	for (const persona of ["gentleman", "neutral"] as const) {
+test("live wrapper carries the canonical self-description", () => {
+	for (const persona of ["shevanio-ai", "neutral"] as const) {
 		const prompt = __testing.buildGentlePrompt(persona);
 		assert.match(
 			prompt,
-			/answer as el Gentleman, not as a generic assistant/,
-			`[${persona}] merged bullet must keep 'answer as el Gentleman, not as a generic assistant' (subsumes wrapper :180)`,
+			/answer as Shevanio AI, not as a generic assistant/,
+			`[${persona}] self-identification must name Shevanio AI`,
 		);
 		assert.match(
 			prompt,
-			/senior architect persona/,
-			`[${persona}] merged bullet must keep 'senior architect persona' (subsumes wrapper :181)`,
+			/senior architect and teacher/,
+			`[${persona}] persona discipline must survive`,
 		);
 		assert.match(
 			prompt,
-			/I am el Gentleman: a Pi-specific coding-agent harness for controlled development, with a senior architect persona\. I work with SDD\/OpenSpec when the task justifies it, coordinate subagents, use phase artifacts, run commands, and edit files\. I am not a generic chatbot\./,
-			`[${persona}] the richer translated self-description paragraph (orchestrator :9,:12) must survive in the wrapper`,
+			/I am Shevanio AI, the parent coding-agent identity in Shevanio Pi, a Pi package\/runtime harness for controlled development\. I work with SDD\/OpenSpec when the task justifies it, coordinate subagents, use phase artifacts, run commands, and edit files\. I am not a generic chatbot\./,
+			`[${persona}] the canonical self-description must survive in the wrapper`,
 		);
 	}
 });
 
 test("Table A rule: orchestrator :17 'never introduce yourself...' ADDED to wrapper (orchestrator-only rule)", () => {
-	for (const persona of ["gentleman", "neutral"] as const) {
+	for (const persona of ["shevanio-ai", "neutral"] as const) {
 		const prompt = __testing.buildGentlePrompt(persona);
 		assert.match(
 			prompt,
@@ -280,7 +281,7 @@ test("Table A rule: orchestrator :17 'never introduce yourself...' ADDED to wrap
 });
 
 test("Table A rule: persona-mode selection (trimmed) survives; language clause NOT restated in Identity contract", () => {
-	for (const persona of ["gentleman", "neutral"] as const) {
+	for (const persona of ["shevanio-ai", "neutral"] as const) {
 		const prompt = __testing.buildGentlePrompt(persona);
 		assert.match(
 			prompt,
@@ -291,7 +292,7 @@ test("Table A rule: persona-mode selection (trimmed) survives; language clause N
 });
 
 test("Table A rule: SDD/OpenSpec artifacts + subagents core-capabilities bullet survives (KEEP once)", () => {
-	for (const persona of ["gentleman", "neutral"] as const) {
+	for (const persona of ["shevanio-ai", "neutral"] as const) {
 		const prompt = __testing.buildGentlePrompt(persona);
 		assert.match(
 			prompt,
@@ -302,7 +303,7 @@ test("Table A rule: SDD/OpenSpec artifacts + subagents core-capabilities bullet 
 });
 
 test("Table A rule: memory rule (wrapper phrasing, with never-invent clause) survives (KEEP wrapper)", () => {
-	for (const persona of ["gentleman", "neutral"] as const) {
+	for (const persona of ["shevanio-ai", "neutral"] as const) {
 		const prompt = __testing.buildGentlePrompt(persona);
 		assert.match(
 			prompt,
@@ -313,7 +314,7 @@ test("Table A rule: memory rule (wrapper phrasing, with never-invent clause) sur
 });
 
 test("Table A rule: 'Do not claim portability outside the Pi runtime.' survives (KEEP once, byte-identical wrapper :184 / orchestrator :20)", () => {
-	for (const persona of ["gentleman", "neutral"] as const) {
+	for (const persona of ["shevanio-ai", "neutral"] as const) {
 		const prompt = __testing.buildGentlePrompt(persona);
 		assert.match(
 			prompt,
@@ -332,7 +333,7 @@ test("Table B rule: LB2 subagent-English delegation kept verbatim in orchestrato
 		fileURLToPath(new URL("../assets/orchestrator-delegation.md", import.meta.url)),
 		"utf8",
 	);
-	for (const persona of ["gentleman", "neutral"] as const) {
+	for (const persona of ["shevanio-ai", "neutral"] as const) {
 		const prompt = __testing.buildGentlePrompt(persona) + delegationDetail;
 		assert.match(
 			prompt,
@@ -343,7 +344,7 @@ test("Table B rule: LB2 subagent-English delegation kept verbatim in orchestrato
 });
 
 test("Table B rule: LB3 artifacts-English kept verbatim in orchestrator (unique)", () => {
-	for (const persona of ["gentleman", "neutral"] as const) {
+	for (const persona of ["shevanio-ai", "neutral"] as const) {
 		const prompt = __testing.buildGentlePrompt(persona);
 		assert.match(
 			prompt,
@@ -354,7 +355,7 @@ test("Table B rule: LB3 artifacts-English kept verbatim in orchestrator (unique)
 });
 
 test("Table B rule: LB4 public-comment target language kept verbatim in orchestrator (unique)", () => {
-	for (const persona of ["gentleman", "neutral"] as const) {
+	for (const persona of ["shevanio-ai", "neutral"] as const) {
 		const prompt = __testing.buildGentlePrompt(persona);
 		assert.match(
 			prompt,
@@ -373,7 +374,7 @@ test("Table B rule: LB5 exceptions kept verbatim in orchestrator (unique)", () =
 		fileURLToPath(new URL("../assets/orchestrator-delegation.md", import.meta.url)),
 		"utf8",
 	);
-	for (const persona of ["gentleman", "neutral"] as const) {
+	for (const persona of ["shevanio-ai", "neutral"] as const) {
 		const prompt = __testing.buildGentlePrompt(persona) + delegationDetail;
 		assert.match(
 			prompt,
@@ -427,7 +428,7 @@ function countOccurrences(haystack: string, needle: string): number {
 }
 
 test("dup guard (exact-string): 'Do not claim portability outside the Pi runtime.' occurs exactly once", () => {
-	for (const persona of ["gentleman", "neutral"] as const) {
+	for (const persona of ["shevanio-ai", "neutral"] as const) {
 		const prompt = __testing.buildGentlePrompt(persona);
 		assert.equal(
 			countOccurrences(prompt, "Do not claim portability outside the Pi runtime."),
@@ -439,8 +440,8 @@ test("dup guard (exact-string): 'Do not claim portability outside the Pi runtime
 
 test("dup guard (exact-string): identity self-description sentence occurs exactly once", () => {
 	const selfDescription =
-		"I am el Gentleman: a Pi-specific coding-agent harness for controlled development, with a senior architect persona. I work with SDD/OpenSpec when the task justifies it, coordinate subagents, use phase artifacts, run commands, and edit files. I am not a generic chatbot.";
-	for (const persona of ["gentleman", "neutral"] as const) {
+		"I am Shevanio AI, the parent coding-agent identity in Shevanio Pi, a Pi package/runtime harness for controlled development. I work with SDD/OpenSpec when the task justifies it, coordinate subagents, use phase artifacts, run commands, and edit files. I am not a generic chatbot.";
+	for (const persona of ["shevanio-ai", "neutral"] as const) {
 		const prompt = __testing.buildGentlePrompt(persona);
 		assert.equal(
 			countOccurrences(prompt, selfDescription),
@@ -466,7 +467,7 @@ test("dup guard (exact-string): LB2/LB3/LB4 each occur exactly once", () => {
 		"Generated technical artifacts — whether by the parent inline or by subagents";
 	const lb4 =
 		"Public/contextual comments and replies are different from technical artifacts.";
-	for (const persona of ["gentleman", "neutral"] as const) {
+	for (const persona of ["shevanio-ai", "neutral"] as const) {
 		const prompt = __testing.buildGentlePrompt(persona);
 		assert.equal(
 			countOccurrences(prompt + delegationDetail, lb2),
@@ -500,12 +501,12 @@ function countLanguageMatchConceptOccurrences(text: string): number {
 }
 
 test("dup guard (concept-level): language-match regex matches exactly once per rendered mode, excluding the scoped self-description exception", () => {
-	const gentlemanPrompt = __testing.buildGentlePrompt("gentleman");
+	const canonicalPrompt = __testing.buildGentlePrompt("shevanio-ai");
 	const neutralPrompt = __testing.buildGentlePrompt("neutral");
 	assert.equal(
-		countLanguageMatchConceptOccurrences(gentlemanPrompt),
+		countLanguageMatchConceptOccurrences(canonicalPrompt),
 		1,
-		"gentleman mode must have exactly one non-excepted language-match concept occurrence",
+		"shevanio-ai mode must have exactly one non-excepted language-match concept occurrence",
 	);
 	assert.equal(
 		countLanguageMatchConceptOccurrences(neutralPrompt),
@@ -518,12 +519,12 @@ test("dup guard (concept-level): language-match regex matches exactly once per r
 // Added-rule assertion — task 1.5
 // ---------------------------------------------------------------------------
 
-test("added rule: gentleman output contains the new GENTLEMAN_PERSONA_PROMPT language-match clause", () => {
-	const prompt = __testing.buildGentlePrompt("gentleman");
+test("shevanio-ai output contains the canonical persona language-match clause", () => {
+	const prompt = __testing.buildGentlePrompt("shevanio-ai");
 	assert.match(
 		prompt,
 		/Always respond in the same language the user writes in\./,
-		"gentleman prompt must contain the new language-match clause mirroring NEUTRAL_PERSONA_PROMPT :158",
+		"shevanio-ai prompt must contain the language-match clause mirrored by neutral mode",
 	);
 });
 
@@ -604,24 +605,24 @@ test("byte delta: net per-session injection delta matches byte-measurements.md (
 // Requirement: Persona Constant Selection Keeps Working
 // ---------------------------------------------------------------------------
 
-test("gentleman persona selected: GENTLEMAN_PERSONA_PROMPT content appears once, no neutral-only rule leaks in", () => {
-	const prompt = __testing.buildGentlePrompt("gentleman");
-	assert.match(prompt, /Current persona mode: gentleman/);
+test("shevanio-ai persona selected: canonical content appears once, no neutral-only rule leaks in", () => {
+	const prompt = __testing.buildGentlePrompt("shevanio-ai");
+	assert.match(prompt, /Current persona mode: shevanio-ai/);
 	assert.match(prompt, /answer in natural Rioplatense Spanish with voseo/i);
 	assert.doesNotMatch(
 		prompt,
 		/Do NOT use voseo \(vos ten[eé]s/i,
-		"gentleman prompt must not leak the neutral-only voseo prohibition bullet",
+		"shevanio-ai prompt must not leak the neutral-only voseo prohibition bullet",
 	);
 });
 
-test("neutral persona selected: NEUTRAL_PERSONA_PROMPT content appears once, no gentleman-only rule leaks in", () => {
+test("neutral persona selected: neutral content appears once, no canonical-only rule leaks in", () => {
 	const prompt = __testing.buildGentlePrompt("neutral");
 	assert.match(prompt, /Current persona mode: neutral/);
 	assert.match(prompt, /Do NOT use voseo/i);
 	assert.doesNotMatch(
 		prompt,
 		/answer in natural Rioplatense Spanish with voseo/i,
-		"neutral prompt must not leak the gentleman-only voseo instruction",
+		"neutral prompt must not leak the shevanio-ai-only voseo instruction",
 	);
 });

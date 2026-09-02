@@ -708,16 +708,10 @@ async function pathExists(path: string): Promise<boolean> {
 }
 
 type PersonaMode = "shevanio-ai" | "neutral";
-type PersonaPresentationMode = "gentleman" | "neutral";
 
-const PERSONA_OPTIONS = ["gentleman", "neutral"] as const;
+const PERSONA_OPTIONS = ["shevanio-ai", "neutral"] as const;
 
-// Temporary presentation adapter: config authority migrates before visible identity.
-function presentPersonaMode(mode: PersonaMode | "gentleman"): PersonaPresentationMode {
-	return mode === "neutral" ? "neutral" : "gentleman";
-}
-
-const GENTLEMAN_PERSONA_PROMPT = `Persona:
+const SHEVANIO_AI_PERSONA_PROMPT = `Persona:
 - Be direct, technical, and concise.
 - Always respond in the same language the user writes in.
 - When the user writes Spanish, answer in natural Rioplatense Spanish with voseo.
@@ -737,25 +731,24 @@ const NEUTRAL_PERSONA_PROMPT = `Persona:
 - Correct errors directly, explain why, and show the better path.`;
 
 function buildGentlePrompt(
-	persona: PersonaMode | "gentleman",
+	persona: PersonaMode,
 	cwd: string = process.cwd(),
 	activeTools?: readonly string[],
 ): string {
-	const presentedPersona = presentPersonaMode(persona);
 	const personaPrompt =
-		presentedPersona === "neutral" ? NEUTRAL_PERSONA_PROMPT : GENTLEMAN_PERSONA_PROMPT;
+		persona === "neutral" ? NEUTRAL_PERSONA_PROMPT : SHEVANIO_AI_PERSONA_PROMPT;
 	const languageBoundary =
-		presentedPersona === "neutral"
+		persona === "neutral"
 			? "Language: neutral/professional Spanish when the user writes Spanish. Do NOT use voseo or Rioplatense regional expressions."
 			: "Language: natural Rioplatense Spanish with voseo when the user writes Spanish.";
-	return `## el Gentleman Identity and Harness
+	return `## Shevanio AI Identity and Shevanio Pi Harness
 
-Current persona mode: ${presentedPersona}
+Current persona mode: ${persona}
 
-You are el Gentleman: a Pi-specific coding-agent harness for controlled development work.
+Shevanio AI is the parent/product identity; Shevanio Pi is the package/runtime harness and ecosystem configurator.
 
 Identity contract:
-- When the user asks who or what you are, answer as el Gentleman, not as a generic assistant, and never introduce yourself as only "your assistant" or "the default assistant". Convey this meaning, translated into the user's language: "I am el Gentleman: a Pi-specific coding-agent harness for controlled development, with a senior architect persona. I work with SDD/OpenSpec when the task justifies it, coordinate subagents, use phase artifacts, run commands, and edit files. I am not a generic chatbot."
+- When the user asks who or what you are, answer as Shevanio AI, not as a generic assistant, and never introduce yourself as only "your assistant" or "the default assistant". Convey this meaning, translated into the user's language: "I am Shevanio AI, the parent coding-agent identity in Shevanio Pi, a Pi package/runtime harness for controlled development. I work with SDD/OpenSpec when the task justifies it, coordinate subagents, use phase artifacts, run commands, and edit files. I am not a generic chatbot."
 - Follow the currently selected persona mode.
 - Mention SDD/OpenSpec phase artifacts and subagents as core capabilities.
 - Mention memory only when memory packages or callable memory tools are actually active; never invent persistent memory.
@@ -766,7 +759,7 @@ ${personaPrompt}
 ${languageBoundary}
 
 Harness principles:
-- el Gentleman is not prompt engineering. It is runtime discipline around powerful agents.
+- Shevanio Pi is not prompt engineering. It is runtime discipline around powerful agents.
 - Prefer SDD/OpenSpec artifacts over floating chat context for non-trivial work.
 - Clarify scope, constraints, acceptance criteria, and non-goals before implementation.
 - Use subagents when available for exploration, planning, implementation, and review, while keeping one parent session responsible for orchestration.
@@ -2585,18 +2578,18 @@ async function handlePersonaCommand(args: string, ctx: ExtensionContext): Promis
 		ctx.ui.notify(`Unknown persona scope: ${requestedScope}. Use global or project.`, "warning");
 		return;
 	}
-	const current = presentPersonaMode(readPersonaMode(ctx.cwd));
+	const current = readPersonaMode(ctx.cwd);
 	const selected = await ctx.ui.select(
-		`el Gentleman persona (current: ${current})`,
+		`Shevanio AI persona (current: ${current})`,
 		[...PERSONA_OPTIONS],
 	);
-	if (selected !== "gentleman" && selected !== "neutral") return;
-	const written = writePersonaMode(ctx.cwd, selected === "gentleman" ? "shevanio-ai" : "neutral", requestedScope);
+	if (selected !== "shevanio-ai" && selected !== "neutral") return;
+	const written = writePersonaMode(ctx.cwd, selected, requestedScope);
 	const resolution = resolvePersonaConfig(ctx.cwd), diagnostics = personaDiagnostics(resolution);
 	const ineffective = resolution.decidingPath !== written.path;
 	ctx.ui.notify(
 		[
-			`el Gentleman persona set to: ${selected}`,
+			`Shevanio AI persona set to: ${selected}`,
 			ineffective
 				? `Write to ${written.path} is ineffective because ${resolution.source} file ${resolution.decidingPath} still wins.`
 				: `${requestedScope === "global" ? "Global" : "Project"} config: ${written.path}`,
@@ -5224,7 +5217,6 @@ export const __testing = {
 	loadRuntimeGuardrailsConfig,
 	buildGentlePrompt,
 	shouldInjectPersona,
-	presentPersonaMode,
 	parsePersonaDocument,
 	resolvePersonaConfig,
 	personaPaths,
@@ -5601,7 +5593,7 @@ function createGentleAiExtensionForTesting(
 	});
 
 	registerCanonicalCommand(pi, "persona", {
-		description: "Switch el Gentleman persona between gentleman and neutral.",
+		description: "Switch Shevanio AI persona between shevanio-ai and neutral.",
 		handler: async (args, ctx) => {
 			await handlePersonaCommand(args, ctx);
 		},
@@ -5807,7 +5799,7 @@ function createGentleAiExtensionForTesting(
 				[
 					"Shevanio Pi package is active.",
 					...(devBinary.state === "inactive" ? [] : [devBinary.line]),
-					`Persona: ${presentPersonaMode(readPersonaMode(ctx.cwd))}`,
+					`Persona: ${readPersonaMode(ctx.cwd)}`,
 					`Global SDD agents: ${agentsInstalled ? "installed" : "not installed"}`,
 					`Global SDD chains: ${chainsInstalled ? "installed" : "not installed"}`,
 					`Global SDD assets stale: ${staleSddAssets} file(s)${

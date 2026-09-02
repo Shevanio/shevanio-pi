@@ -25,6 +25,9 @@ const EXTENSIONS = [
 const COMMAND_SUFFIXES = ["background-subagents", "banner", "banner-color", "dev-binary", "doctor", "install-sdd", "models", "persona", "review-mode", "sdd-preflight", "status", "toggle-rose", "toggle-text-logo"];
 const GENERIC_COMMANDS = ["sdd-status", "sdd-continue", "sdd-init", "skill-registry:refresh"];
 const EXPECTED_COMMANDS = [...COMMAND_SUFFIXES.flatMap((suffix) => [`shevanio-pi:${suffix}`, `gentle:${suffix}`]), ...GENERIC_COMMANDS];
+const SELF_DESCRIPTION = "I am Shevanio AI, the parent coding-agent identity in Shevanio Pi, a Pi package/runtime harness for controlled development. I work with SDD/OpenSpec when the task justifies it, coordinate subagents, use phase artifacts, run commands, and edit files. I am not a generic chatbot.";
+const PARENT_PACKAGE_MODEL = "Shevanio AI is the parent/product identity; Shevanio Pi is the package/runtime harness and ecosystem configurator.";
+const PROVIDER_SENTENCE = "Gentle AI dynamically supplies runtime-specific RDD instructions via generated Pi APPEND_SYSTEM composition. Follow only those exact native instructions; if absent or unsupported, this package does not invent or fall back.";
 
 const FORBIDDEN_COMPAT_COMMANDS = [
 	"gentle-ai:install-sdd",
@@ -383,20 +386,24 @@ async function run() {
 		}
 		assert.equal(registered.some(({ invocationName }) => /:(?:1|2)$/.test(invocationName)), false);
 		for (const suffix of COMMAND_SUFFIXES) assert.ok(runner.getCommand(`gentle:${suffix}`).description.startsWith(deprecatedAliasNotice(suffix)));
+		assert.equal(runner.getCommand("shevanio-pi:persona").description, "Switch Shevanio AI persona between shevanio-ai and neutral.");
 		const registeredToolNames = runner.getAllRegisteredTools().map(({ definition }) => definition.name);
 		assert.deepEqual(registeredToolNames.filter((name) => name.startsWith("shevanio_review")).sort(), ["shevanio_review", "shevanio_review_capture", "shevanio_review_scope"]);
 		for (const name of ["gentle_review", "gentle_review_capture", "gentle_review_scope"]) assert.equal(registeredToolNames.includes(name), false, `legacy runtime review tool should not be registered: ${name}`);
 			const routed = [];
-			const personaSelections = [];
-			runner.setUIContext({ ...runner.getUIContext(), notify(message, type = "info") { routed.push({ message, type }); }, async select(_label, options) { return personaSelections.shift() ?? options[0]; } });
+			const personaSelections = [], personaPickers = [];
+			runner.setUIContext({ ...runner.getUIContext(), notify(message, type = "info") { routed.push({ message, type }); }, async select(label, options) { personaPickers.push({ label, options }); return personaSelections.shift() ?? options[0]; } });
 			const canonicalPersonaGlobalPath = join(canonicalConfigHome, "persona.json"), legacyPersonaGlobalPath = join(globalConfigHome, "persona.json");
 			const canonicalPersonaProjectPath = join(runtimeCwd, ".pi", "shevanio-pi", "persona.json"), legacyPersonaProjectPath = join(runtimeCwd, ".pi", "gentle-ai", "persona.json");
 			const legacyPersonaGlobalBytes = '{"mode":"neutral","user":"preserve-global"}\n', legacyPersonaProjectBytes = '{"mode":"gentleman","user":"preserve-project"}\n';
 			await mkdir(dirname(legacyPersonaGlobalPath), { recursive: true }); await writeFile(legacyPersonaGlobalPath, legacyPersonaGlobalBytes);
-			personaSelections.push("gentleman"); await session.prompt("/shevanio-pi:persona global");
+			personaSelections.push("shevanio-ai"); await session.prompt("/shevanio-pi:persona global");
+			assert.deepEqual(personaPickers.at(-1), { label: "Shevanio AI persona (current: neutral)", options: ["shevanio-ai", "neutral"] });
 			assert.equal(await readFile(canonicalPersonaGlobalPath, "utf8"), '{\n  "schema": "shevanio-pi.persona/v1",\n  "mode": "shevanio-ai"\n}\n');
 			assert.equal(await readFile(legacyPersonaGlobalPath, "utf8"), legacyPersonaGlobalBytes);
 			assert.ok(routed.at(-1).message.includes(canonicalPersonaGlobalPath) && routed.at(-1).message.includes(legacyPersonaGlobalPath), "runtime collision must name both global sources");
+			routed.length = 0; await session.prompt("/shevanio-pi:status");
+			assert.match(routed.at(-1).message, /Persona: shevanio-ai/); assert.doesNotMatch(routed.at(-1).message, /gentleman/);
 			await mkdir(dirname(legacyPersonaProjectPath), { recursive: true }); await writeFile(legacyPersonaProjectPath, legacyPersonaProjectBytes);
 			personaSelections.push("neutral"); await session.prompt("/shevanio-pi:persona project");
 			assert.match(await readFile(canonicalPersonaProjectPath, "utf8"), /"mode": "neutral"/); assert.equal(await readFile(legacyPersonaProjectPath, "utf8"), legacyPersonaProjectBytes);
@@ -425,6 +432,7 @@ async function run() {
 		await session.prompt("/shevanio-pi:status");
 		assert.equal(routed.length, 1, "canonical status must route exactly once without a warning");
 		const canonicalStatus = routed[0];
+		assert.match(canonicalStatus.message, /Persona: neutral/); assert.doesNotMatch(canonicalStatus.message, /gentleman/);
 		routed.length = 0;
 		await session.prompt("/gentle:status");
 		assert.deepEqual(routed, [{ message: deprecatedAliasNotice("status"), type: "warning" }, canonicalStatus], "legacy status must warn once and route the canonical handler once");
@@ -443,13 +451,18 @@ async function run() {
 	// always-on combined prompt now only carries a pointer to it. Union read
 	// so these assertions are repointed, not weakened.
 	const delegationDetail = await readFile(join(ROOT, "assets", "orchestrator-delegation.md"), "utf8");
+	const alwaysOnAsset = await readFile(join(ROOT, "assets", "orchestrator.md"), "utf8");
+	assert.equal(alwaysOnAsset.split(PROVIDER_SENTENCE).length - 1, 1); assert.doesNotMatch(alwaysOnAsset, /\bel Gentleman\b/);
 
 	const promptCwd = await tempWorkspace();
 	try {
 		const promptHook = hooks.get("before_agent_start")[0];
 		const promptResult = await promptHook({ systemPrompt: "base" }, createCtx(promptCwd));
 		assert.match(promptResult.systemPrompt, /base/);
-		assert.match(promptResult.systemPrompt, /el Gentleman/);
+		assert.match(promptResult.systemPrompt, /## Shevanio AI Identity and Shevanio Pi Harness/);
+		assert.ok(promptResult.systemPrompt.includes(PARENT_PACKAGE_MODEL));
+		assert.equal(promptResult.systemPrompt.split(SELF_DESCRIPTION).length - 1, 1);
+		assert.doesNotMatch(promptResult.systemPrompt, /\bel Gentleman\b/);
 		assert.match(promptResult.systemPrompt + delegationDetail, /do not pass the `model` parameter by default/);
 		assert.match(
 			promptResult.systemPrompt + delegationDetail,
@@ -480,6 +493,8 @@ async function run() {
 		);
 		const neutralPromptResult = await promptHook({ systemPrompt: "base" }, createCtx(promptCwd));
 		assert.match(neutralPromptResult.systemPrompt, /Do not use slang or regional expressions/);
+		assert.ok(neutralPromptResult.systemPrompt.includes(PARENT_PACKAGE_MODEL));
+		assert.equal(neutralPromptResult.systemPrompt.split(SELF_DESCRIPTION).length - 1, 1);
 		assert.doesNotMatch(
 			neutralPromptResult.systemPrompt,
 			/When the user writes Spanish, answer in natural Rioplatense Spanish with voseo/,
@@ -501,6 +516,7 @@ async function run() {
 			'{"mode":"gentleman"}\n',
 		);
 		const localOverridePromptResult = await promptHook({ systemPrompt: "base" }, createCtx(promptCwd));
+		assert.match(localOverridePromptResult.systemPrompt, /Current persona mode: shevanio-ai/);
 		assert.match(
 			localOverridePromptResult.systemPrompt,
 			/When the user writes Spanish, answer in natural Rioplatense Spanish with voseo/,
@@ -1273,7 +1289,7 @@ async function run() {
 		assert.match(promptResult.systemPrompt, /SDD Session Preflight/);
 		assert.doesNotMatch(
 			promptResult.systemPrompt,
-			/el Gentleman Identity and Harness/,
+			/Shevanio AI Identity and Shevanio Pi Harness/,
 			"SDD executor startup must not receive the parent orchestrator prompt",
 		);
 		assert.doesNotMatch(
@@ -1293,7 +1309,7 @@ async function run() {
 		assert.equal(ctx.ui.selections.length, 0, "SDD-agent startup should reuse automatic preferences");
 		assert.doesNotMatch(
 			reusedPromptResult.systemPrompt,
-			/el Gentleman Identity and Harness/,
+			/Shevanio AI Identity and Shevanio Pi Harness/,
 			"named SDD executor startup must not receive the parent orchestrator prompt",
 		);
 	} finally {

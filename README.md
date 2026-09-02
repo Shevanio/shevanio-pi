@@ -1,17 +1,17 @@
-# shevanio-pi
+# Shevanio AI for Shevanio Pi
 
 [![license](https://img.shields.io/github/license/Shevanio/shevanio-pi?color=blue)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/Shevanio/shevanio-pi?style=flat&color=yellow)](https://github.com/Shevanio/shevanio-pi/stargazers)
 [![SDD/OpenSpec](https://img.shields.io/badge/SDD-OpenSpec-00ADD8)](#sddopenspec-flow)
 [![Subagents](https://img.shields.io/badge/Pi-subagents-brightgreen)](#what-it-adds)
 
-**A controlled development harness for Pi.**
+**Shevanio AI, delivered through the Shevanio Pi controlled development harness for Pi.**
 
-`shevanio-pi` provides a structured operating layer for Spec-Driven Development, focused subagents, strict TDD evidence, reviewable work units, safety guards, project/user skill discovery, and bounded native review.
+Shevanio AI is the parent/product identity. Shevanio Pi (`shevanio-pi`) is the package/runtime harness and ecosystem configurator that provides a structured operating layer for Spec-Driven Development, focused subagents, strict TDD evidence, reviewable work units, safety guards, project/user skill discovery, and bounded native review.
 
-Pi already has strong tools. `shevanio-pi` adds workflow discipline, keeps review evidence Git-derived instead of agent narration, and leaves delivery decisions to ordinary repository policy.
+Pi already has strong tools. Shevanio Pi adds workflow discipline, keeps review evidence Git-derived instead of agent narration, and leaves delivery decisions to ordinary repository policy.
 
-The canonical repository and product owner is [Shevanio/shevanio-pi](https://github.com/Shevanio/shevanio-pi).
+The canonical repository for the Shevanio Pi package is [Shevanio/shevanio-pi](https://github.com/Shevanio/shevanio-pi).
 
 > **Publication status:** `shevanio-pi` is not yet available from npm. Canonical npm installation commands will be documented only after publication is independently verified.
 
@@ -37,7 +37,7 @@ Most coding-agent sessions fail for operational reasons, not model reasons:
 
 | Capability                     | What it does                                                                                                                                  |
 | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Configurable persona**       | Makes Pi behave like a senior architect and teacher, not a generic chatbot. Spanish responses use Rioplatense voseo by default; neutral mode is saved globally with project overrides. |
+| **Configurable persona**       | Runs the Shevanio AI parent identity as a senior architect and teacher, not a generic chatbot. Spanish responses use Rioplatense voseo by default; neutral mode is saved globally with project overrides. |
 | **Configurable startup intro** | Adds a startup presentation, compact runtime panel, color presets, and commands to hide or show the decorative parts.                       |
 | **Work routing discipline**    | Small tasks stay inline. Context-heavy exploration can be delegated. Large or risky changes go through SDD/OpenSpec.                          |
 | **SDD/OpenSpec assets**        | Installs phase agents and chains for `init`, `onboard`, `explore`, `proposal`, `spec`, `design`, `tasks`, `apply`, `verify`, `sync`, and `archive`. |
@@ -88,7 +88,7 @@ pi
 /shevanio-pi:sdd-preflight   Run or reuse the session SDD preflight explicitly.
 /sdd-init                  Create or refresh openspec/config.yaml (openspec/both stores only).
 /shevanio-pi:models             Assign global model/effort routing to SDD/custom agents.
-/shevanio-pi:persona            Switch between gentleman and neutral persona modes.
+/shevanio-pi:persona            Switch between shevanio-ai and neutral persona modes.
 /shevanio-pi:background-subagents  Show or set the managed background-subagents policy, with its deciding source.
 /shevanio-pi:banner             Configure startup rose, text logo, and color preset.
 ```
@@ -466,7 +466,7 @@ Delegation contract:
 
 | Persona     | Behavior                                                                                                      |
 | ----------- | ------------------------------------------------------------------------------------------------------------- |
-| `gentleman` | Senior architect, teacher, direct technical feedback, Rioplatense Spanish/voseo when the user writes Spanish. |
+| `shevanio-ai` | Senior architect, teacher, direct technical feedback, Rioplatense Spanish/voseo when the user writes Spanish. |
 | `neutral`   | Same discipline, warmer professional language, no regional expression.                                        |
 
 Persona authority uses this precedence:
@@ -475,7 +475,7 @@ Persona authority uses this precedence:
 2. `.pi/gentle-ai/persona.json` (project legacy)
 3. `${SHEVANIO_PI_CONFIG_HOME:-~/.pi/shevanio-pi}/persona.json` (global canonical)
 4. `${GENTLE_PI_CONFIG_HOME:-~/.pi/gentle-ai}/persona.json` (global legacy)
-5. built-in `gentleman` presentation
+5. built-in `shevanio-ai` mode
 
 Canonical files contain only the schema and mode:
 
@@ -486,9 +486,9 @@ Canonical files contain only the schema and mode:
 }
 ```
 
-The canonical modes are `shevanio-ai` and `neutral`; the picker temporarily displays `gentleman` and `neutral` until the identity migration completes. `/shevanio-pi:persona` and `/shevanio-pi:persona global` write only the canonical global target. `/shevanio-pi:persona project` writes only the canonical project file.
+The canonical modes and picker options are `shevanio-ai` and `neutral`. `/shevanio-pi:persona` and `/shevanio-pi:persona global` write only the canonical global target. `/shevanio-pi:persona project` writes only the canonical project file.
 
-Legacy unversioned files accept `gentleman` (normalized to `shevanio-ai`) or `neutral` and are never rewritten. A present malformed or unreadable winning file fails closed to the built-in `gentleman` presentation without falling through. Distinct same-scope canonical and legacy files report whether their normalized values match or conflict. Run `/reload` or start a new Pi session after switching persona.
+Legacy unversioned files accept `gentleman` (normalized to `shevanio-ai`) or `neutral` and are never rewritten. `gentleman` is read compatibility only and is never offered by the picker or emitted as the current mode. A present malformed or unreadable winning file fails closed to the built-in `shevanio-ai` mode without falling through. Distinct same-scope canonical and legacy files report whether their normalized values match or conflict. Run `/reload` or start a new Pi session after switching persona.
 
 ## Model and effort assignment
 
@@ -607,7 +607,7 @@ Startup flag:
 pi --no-skill-registry
 ```
 
-Use it when you want skills available normally but do not want Gentle AI to refresh/watch `.atl/skill-registry.md` on startup. `pi -ns` / `pi --no-skills` also skip the registry startup work because Pi is already disabling skill loading.
+Use it when you want skills available normally but do not want Shevanio Pi to refresh/watch `.atl/skill-registry.md` on startup. `pi -ns` / `pi --no-skills` also skip the registry startup work because Pi is already disabling skill loading.
 
 ## Included skills
 
@@ -637,7 +637,7 @@ Memory contract for SDD delegation:
 
 | Path                           | Purpose                                                                                                    |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| `extensions/gentle-ai.ts`      | Injects identity, orchestrates native review authority, refreshes global SDD assets, registers commands, applies model/persona config, and enforces runtime safety. |
+| `extensions/gentle-ai.ts`      | Injects the Shevanio AI parent identity, orchestrates native review authority, refreshes global SDD assets, registers commands, applies model/persona config, and enforces runtime safety. |
 | `lib/native-review-cli.ts`     | Strict package-local adapter for Gentle AI START, FINALIZE, VALIDATE, SDD binding, and status contracts.     |
 | `lib/review-integration-v2.ts` | Strict consumer decoder for negotiated capabilities, operations, target status, projections, repair, and failures against contract `review-integration/v2` (active today).  |
 | `lib/review-candidate-view.ts` | Builds immutable changed-scope actor views while preserving full-tree, path, mode, symlink, and index integrity. |
@@ -658,7 +658,7 @@ Memory contract for SDD delegation:
 | `assets/agents/`               | SDD agents installed as global Pi runtime assets.                                                          |
 | `assets/chains/`               | SDD chains installed as global Pi runtime assets.                                                          |
 | `assets/support/`              | Strict TDD support docs for apply/verify phases.                                                           |
-| `skills/`                      | Gentle AI delivery and collaboration skills.                                                               |
+| `skills/`                      | Shevanio Pi delivery and collaboration skills.                                                              |
 | `prompts/`                     | The `/skill-creation` prompt template.                                                                     |
 | `docs/skill-style-guide.md`    | Normative style guide used by the packaged skill creation/improvement skills.                              |
 | `docs/native-authority-architecture.md` | Post-U8 ownership boundary, reproducible slimming metrics, Windows evidence, exact #191 seam, and the `review-integration/v1`→`v2` migration status, including the "compact-v2" naming disambiguation.     |
