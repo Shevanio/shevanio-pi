@@ -6,6 +6,7 @@ import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { registerCanonicalCommand } from "../lib/command-alias.ts";
 
 const execAsync = promisify(exec);
 const PI_AGENT_DIR = join(os.homedir(), ".pi", "agent");
@@ -30,19 +31,7 @@ const BANNER_PALETTES: Record<BannerColor, { rose: [number, number, number]; lab
   green: { rose: [110, 220, 145], label: [85, 175, 115], value: [145, 240, 170], logoFresh: [120, 230, 150], logoDim: [30, 95, 50] },
 };
 
-const TEXT_LOGO = [
-  "                  ▄▄▄▀▀▀▀▀██                                ▄▄▀▄▄           ▄▄█▀▀▀██   ▀▀█▄    ▄▄▄",
-  "              ▄▄█▀▀▒▒▒▒▒▄▄█▀▒                   ▄██     ▄▄█▀█▄█▀▒▒      ▄█▀▀ ▒▒▒▄█▀▀▒   ▄██▒ ▄█▀▒▒▒",
-  "          ▄▄██▀▒▒▒▒▒▄▄▄▀▀▒▒▒▒        ▄▄▄  ▀▀▀▀██▀▀▀▀▀███▀█▄▀▀▒▒▒▒      ██▒▒▒▒▄▄█▀▒▒▒▒▄▄█▀▀▄██▀▒▒▒",
-  "        ▄██▀▒▒▒▒     ▒▒▄▄█ ▄▄▄▀██ ▄▄▄▀▀▀▄  ▄██▀▒▒▒▒▄██▀▀▀▒▄▄███         ▒▒ ▄███▄▄▄█▀▀▀▒▒▄██▀▒▒▒",
-  "       ██▀▒▒▒     ▄▄▄███▀▄██▀▀▀▄▄██▀▀▄█▀▄▄██▀▒▒▒▄▄██▀▒▒▄██▀▀▀▄▄▀▀▀▀▀▀▀▀▀ ▄█▀▀▒▒▒▒▒▒▒▒▒▄██▒▒▒▒",
-  "       ▀█▄▄▄▄▄▀▀▀█▄▄███▄▒▀▀▀▀▀▀▒▀▀▒▒▀▀▀▀▒██▄▄▀▀▀ ▀█▄▀▀▀ ▀▀▀▀▀▒▒▒▒▒▒▒▒▒▒▄██▀▒▒▒       ███▒▒",
-  "        ▒▄▄▄█▀▀▀█▄█▀▀▒▒▒▒ ▒▒▒▒▒▒ ▒▒  ▒▒▒▒ ▒▒▒▒▒▒▒ ▒▒▒▒▒▒ ▒▒▒▒▒        ▀▀▀▒▒▒          ▒▒▒",
-  "     ▄▄▀▀ ▒▒▒▒▄██▀▒▒▒▒                                                 ▒▒▒",
-  "   ▄█ ▒▒▒▄▄██▀▀▒▒▒▒",
-  "    ▀▀▀▀▀▀▒▒▒▒▒▒",
-  "     ▒▒▒▒▒▒",
-];
+const TEXT_LOGO = ["SHEVANIO PI"];
 
 const ROSE_LARGE_RAW = [
   "             ⣠⣾⣷⣶⣦⣤⣤⣄⣠⣄⣀  ⢀⣀⣀",
@@ -185,7 +174,7 @@ function buildLetterSpans(bounds: Span, weights: number[]): Span[] {
 }
 
 const LOGO_BOUNDS = computeLogoBounds(TEXT_LOGO);
-const LETTER_WEIGHTS = [14, 10, 11, 10, 9, 11, 6, 13, 12]; // G E N T L E - P I
+const LETTER_WEIGHTS = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]; // S H E V A N I O P I
 const LETTER_SPANS = buildLetterSpans(LOGO_BOUNDS, LETTER_WEIGHTS);
 
 function letterIndexAtX(x: number): number {
@@ -421,7 +410,7 @@ function buildPenLogoLine(
     }
 
     let order = rawOrder;
-    // v1: ajuste SOLO para la primera letra (G), con más curvatura caligráfica.
+    // Keep the first letter's original calligraphic curve bias.
     if (letterIdx === 0) {
       const s = LETTER_SPANS[0];
       const w = Math.max(1, s.end - s.start + 1);
@@ -539,9 +528,9 @@ export default function (pi: ExtensionAPI) {
     );
   };
 
-  const registerBannerCommand = (name: string) => {
-    pi.registerCommand(name, {
-      description: "Configure the Gentle Pi startup banner.",
+  const registerBannerCommand = (suffix: string) => {
+    registerCanonicalCommand(pi, suffix, {
+      description: "Configure the Shevanio Pi startup banner.",
       handler: async (_args, ctx) => {
         const config = await readBannerConfig();
         const selected = await ctx.ui.select("Startup banner", [
@@ -562,8 +551,8 @@ export default function (pi: ExtensionAPI) {
       },
     });
   };
-  const registerToggleCommand = (name: string, key: "showRose" | "showTextLogo") => {
-    pi.registerCommand(name, {
+  const registerToggleCommand = (suffix: string, key: "showRose" | "showTextLogo") => {
+    registerCanonicalCommand(pi, suffix, {
       description: `Toggle startup banner ${key === "showRose" ? "rose" : "text logo"}.`,
       handler: async (_args, ctx) => {
         const config = await readBannerConfig();
@@ -573,8 +562,8 @@ export default function (pi: ExtensionAPI) {
       },
     });
   };
-  const registerColorCommand = (name: string) => {
-    pi.registerCommand(name, {
+  const registerColorCommand = (suffix: string) => {
+    registerCanonicalCommand(pi, suffix, {
       description: "Set startup banner color preset.",
       handler: async (args, ctx) => {
         const config = await readBannerConfig();
@@ -591,10 +580,10 @@ export default function (pi: ExtensionAPI) {
       },
     });
   };
-  registerBannerCommand("gentle:banner");
-  registerToggleCommand("gentle:toggle-rose", "showRose");
-  registerToggleCommand("gentle:toggle-text-logo", "showTextLogo");
-  registerColorCommand("gentle:banner-color");
+  registerBannerCommand("banner");
+  registerToggleCommand("toggle-rose", "showRose");
+  registerToggleCommand("toggle-text-logo", "showTextLogo");
+  registerColorCommand("banner-color");
 
   pi.on("session_start", async (_event, ctx) => {
     if (!ctx.hasUI) return;

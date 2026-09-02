@@ -5,8 +5,10 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync,
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { createAgentSession, DefaultResourceLoader, SessionManager } from "@earendil-works/pi-coding-agent";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
+const originalCwd = process.cwd();
 const temporary = mkdtempSync(join(tmpdir(), "shevanio-pi-packed-runner-"));
 const packDirectory = join(temporary, "pack");
 const installDirectory = join(temporary, "install");
@@ -50,6 +52,7 @@ try {
 		stdio: "inherit",
 	});
 	const packageRoot = join(installDirectory, "node_modules", "shevanio-pi");
+	for (const path of ["lib/command-alias.ts", "extensions/startup-banner.ts"]) if (!existsSync(join(packageRoot, path))) throw new Error(`packed shevanio-pi is missing ${path}`);
 	const capabilities = JSON.parse(readFileSync(join(packageRoot, "contracts", "review-integration", "v2", "fixtures", "capabilities.fixture.json"), "utf8"));
 	// Import the PACKED consumer's own decoder and exercise it against the bundled,
 	// byte-pinned capabilities fixture. This proves canonical package discovery and
@@ -58,8 +61,31 @@ try {
 	const { decodeReviewCapabilitiesV2 } = await import(pathToFileURL(join(packageRoot, "runtime", "review-integration-v2.mjs")).href);
 	const decoded = decodeReviewCapabilitiesV2(capabilities, capabilities.executable.sha256);
 	if (decoded.contract !== "gentle-ai.review-integration/v2" || decoded.packageVersion !== capabilities.package.version) throw new Error("packed shevanio-pi contract fixture is incompatible");
+	const suffixes = ["background-subagents", "banner", "banner-color", "dev-binary", "doctor", "install-sdd", "models", "persona", "review-mode", "sdd-preflight", "status", "toggle-rose", "toggle-text-logo"];
+	const runtimeCwd = join(temporary, "runtime-cwd"), runtimeAgentDir = join(temporary, "runtime-agent"), runtimeHome = join(temporary, "runtime-home");
+	for (const path of [runtimeCwd, runtimeAgentDir, runtimeHome]) mkdirSync(path);
+	Object.assign(process.env, { HOME: runtimeHome, USERPROFILE: runtimeHome, GENTLE_PI_CONFIG_HOME: join(runtimeHome, "config"), GENTLE_PI_AGENT_HOME: runtimeAgentDir, GENTLE_PI_NO_SKILL_REGISTRY: "1" });
+	process.chdir(runtimeCwd);
+	const loader = new DefaultResourceLoader({ cwd: runtimeCwd, agentDir: runtimeAgentDir, additionalExtensionPaths: ["ask-user-choice.ts", "codegraph-tools.ts", "gentle-ai.ts", "pi-pretty.ts", "quiet-tools.ts", "sdd-init.ts", "skill-registry.ts", "startup-banner.ts"].map((path) => join(packageRoot, "extensions", path)), noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true });
+	await loader.reload();
+	if (loader.getExtensions().errors.length !== 0) throw new Error(`packed extensions failed to load: ${JSON.stringify(loader.getExtensions().errors)}`);
+	const { session } = await createAgentSession({ cwd: runtimeCwd, agentDir: runtimeAgentDir, resourceLoader: loader, sessionManager: SessionManager.inMemory(runtimeCwd), noTools: "builtin" });
+	const runner = session.extensionRunner, commands = runner.getRegisteredCommands();
+	for (const suffix of suffixes) {
+		for (const name of [`shevanio-pi:${suffix}`, `gentle:${suffix}`]) {
+			const matches = commands.filter((command) => command.name === name);
+			if (matches.length !== 1 || matches[0].invocationName !== name) throw new Error(`packed command ${name} is missing or duplicated`);
+		}
+		if (!runner.getCommand(`gentle:${suffix}`).description.startsWith(`Deprecated alias; use /shevanio-pi:${suffix}. Removed in shevanio-pi 3.0.0.`)) throw new Error(`packed alias gentle:${suffix} has an invalid deprecation description`);
+	}
+	if (commands.some(({ invocationName }) => /:(?:1|2)$/.test(invocationName))) throw new Error("packed commands contain package-internal duplicate suffixes");
+	for (const name of ["sdd-status", "sdd-continue", "sdd-init", "skill-registry:refresh"]) if (commands.filter((command) => command.name === name && command.invocationName === name).length !== 1) throw new Error(`generic command ${name} changed`);
+	const reviewTools = runner.getAllRegisteredTools().map(({ definition }) => definition.name).filter((name) => name.startsWith("gentle_review")).sort();
+	if (JSON.stringify(reviewTools) !== JSON.stringify(["gentle_review", "gentle_review_capture", "gentle_review_scope"])) throw new Error(`packed review tool identities changed: ${reviewTools.join(", ")}`);
+	await runner.emit({ type: "session_shutdown", reason: "quit" });
 	const packageManifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
-	process.stdout.write(`packed package E2E passed (shevanio-pi ${packageManifest.version ?? "unknown"}; bundled Gentle AI contract fixture ${decoded.packageVersion ?? "unknown"}; provider install skipped)\n`);
+	process.stdout.write(`packed package E2E passed (shevanio-pi ${packageManifest.version ?? "unknown"}; 13 canonical commands + deprecated aliases; bundled Gentle AI contract fixture ${decoded.packageVersion ?? "unknown"}; provider install skipped)\n`);
 } finally {
+	process.chdir(originalCwd);
 	rmSync(temporary, { recursive: true, force: true });
 }

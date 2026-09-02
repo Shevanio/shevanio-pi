@@ -70,7 +70,7 @@ test("gentle:doctor and gentle:status surface the active dev-binary override lou
 			createGentleAiExtension({ nativeReviewCli: null })(pi);
 			const cwd = await mkdtemp(join(tmpdir(), "gentle-pi-dev-cwd-"));
 			const expected = `Gentle AI dev binary override active (unpinned, field-test only): ${devBinary} 9.9.9-dev+surface sha256:${sha256.slice(0, 16)}`;
-			for (const command of ["gentle:doctor", "gentle:status"]) {
+			for (const command of ["shevanio-pi:doctor", "shevanio-pi:status"]) {
 				const notifications: Array<{ message: string; severity: string }> = [];
 				await commands.get(command)!.handler("", contextFor(cwd, notifications));
 				assert.equal(notifications.length, 1, command);
@@ -92,7 +92,7 @@ test("without an override the surfaces stay silent about dev binaries", async ()
 		const { pi, commands } = harness();
 		createGentleAiExtension({ nativeReviewCli: null })(pi);
 		const cwd = await mkdtemp(join(tmpdir(), "gentle-pi-dev-cwd-"));
-		for (const command of ["gentle:doctor", "gentle:status"]) {
+		for (const command of ["shevanio-pi:doctor", "shevanio-pi:status"]) {
 			const notifications: Array<{ message: string; severity: string }> = [];
 			await commands.get(command)!.handler("", contextFor(cwd, notifications));
 			assert.equal(notifications.length, 1, command);
@@ -115,7 +115,7 @@ test("an invalid override is surfaced as a failure, never silently ignored", asy
 		createGentleAiExtension({ nativeReviewCli: null })(pi);
 		const cwd = await mkdtemp(join(tmpdir(), "gentle-pi-dev-cwd-"));
 		const notifications: Array<{ message: string; severity: string }> = [];
-		await commands.get("gentle:doctor")!.handler("", contextFor(cwd, notifications));
+		await commands.get("shevanio-pi:doctor")!.handler("", contextFor(cwd, notifications));
 		assert.equal(notifications.length, 1);
 		assert.match(notifications[0]!.message, /fail: Gentle AI dev binary override/);
 		assert.match(notifications[0]!.message, new RegExp(GENTLE_AI_DEV_BINARY_ENV));
@@ -137,7 +137,7 @@ test("gentle:dev-binary registers, reports, and clears the persistent override",
 		const { pi, commands } = harness();
 		createGentleAiExtension({ nativeReviewCli: null })(pi);
 		const cwd = await mkdtemp(join(tmpdir(), "gentle-pi-dev-cwd-"));
-		const command = commands.get("gentle:dev-binary");
+		const command = commands.get("shevanio-pi:dev-binary");
 		assert.ok(command, "gentle:dev-binary command is registered");
 		const registrationPath = gentleAiDevBinaryRegistrationPath({ env: {}, home });
 
