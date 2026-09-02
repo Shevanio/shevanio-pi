@@ -9,6 +9,7 @@ import {
 	readFileSync,
 	realpathSync,
 	rmSync,
+	statSync,
 	writeFileSync,
 } from "node:fs";
 import {
@@ -818,9 +819,16 @@ interface RuntimeGuardrailsConfig {
 	guardedCommands: GuardedCommandsConfig;
 }
 
+type GuardrailFileSource = "canonical-project" | "legacy-project" | "canonical-global" | "legacy-global";
+interface GuardrailFileCandidate { source: GuardrailFileSource; path: string; state: "valid" | "malformed"; config?: RuntimeGuardrailsConfig; identity?: string }
+interface GuardrailScopeResolution { selected?: GuardrailFileCandidate; collision?: { canonical: GuardrailFileCandidate; legacy: GuardrailFileCandidate; equal: boolean } }
+interface RuntimeGuardrailsResolution { config: RuntimeGuardrailsConfig; environmentOverride: boolean; global?: GuardrailScopeResolution; project?: GuardrailScopeResolution }
+
 interface LoadGuardrailsOptions {
-	/** Override the config home directory (used in tests to avoid touching ~/.pi). */
 	gentlePiConfigHome?: string;
+	shevanioPiConfigHome?: string;
+	readFile?: (path: string) => string;
+	fileMetadata?: (path: string) => { identity: string; regular: boolean } | undefined;
 }
 
 const GUARDED_KEY_PATTERNS: Record<GuardedCommandKey, RegExp> = {
@@ -910,60 +918,85 @@ function parseGuardrailsConfigFile(
 	return { autonomousMode, guardedCommands };
 }
 
-/**
- * Load the runtime guardrails config.
- *
- * Resolution order (project overrides global):
- *   1. Check GENTLE_PI_AUTONOMOUS_MODE env var — if "1", forces autonomousMode=true
- *      and uses default guarded command actions.
- *   2. Read global config from ${gentlePiConfigHome}/runtime-guardrails.json
- *   3. Read project config from ${cwd}/.pi/gentle-ai/runtime-guardrails.json
- *      (project values are merged on top of global)
- *   4. Any parse/read error anywhere → fail safe (return SAFE_GUARDRAILS_CONFIG)
- */
-function loadRuntimeGuardrailsConfig(
+function guardrailConfigKey(config: RuntimeGuardrailsConfig): string {
+	return JSON.stringify([config.autonomousMode, ...Object.values(GUARDED_COMMAND_KEY).map((key) => config.guardedCommands[key] ?? null)]);
+}
+
+function existingGuardrailFileMetadata(path: string): { identity: string; regular: boolean } | undefined {
+	try { const stat = statSync(path, { bigint: true }); return { identity: `${stat.dev}:${stat.ino}`, regular: stat.isFile() }; }
+	catch { return undefined; }
+}
+
+function resolveRuntimeGuardrailsConfig(
 	cwd: string,
 	options: LoadGuardrailsOptions = {},
-): RuntimeGuardrailsConfig {
-	try {
-		// Env var override: forces autonomous mode with default actions
-		if (process.env.GENTLE_PI_AUTONOMOUS_MODE === "1") {
-			return { autonomousMode: true, guardedCommands: {} };
+): RuntimeGuardrailsResolution {
+	if (process.env.GENTLE_PI_AUTONOMOUS_MODE === "1") return { config: { autonomousMode: true, guardedCommands: {} }, environmentOverride: true };
+	const read = options.readFile ?? ((path: string) => readFileSync(path, "utf8"));
+	const metadata = options.fileMetadata ?? existingGuardrailFileMetadata;
+	const inspect = (cache: Map<string, Pick<GuardrailFileCandidate, "state" | "config">>, source: GuardrailFileSource, path: string): GuardrailFileCandidate | undefined => {
+		let file: { identity: string; regular: boolean } | undefined;
+		try { file = metadata(path); } catch { /* Reading remains authoritative. */ }
+		const physical = file?.identity;
+		const key = physical === undefined ? `path:${resolve(path)}` : `file:${physical}`;
+		const cached = cache.get(key);
+		if (cached) return { source, path, identity: physical, ...cached };
+		if (file?.regular === false) {
+			const malformed = { state: "malformed" as const };
+			cache.set(key, malformed);
+			return { source, path, identity: physical, ...malformed };
 		}
-
-		const configHome = options.gentlePiConfigHome ?? gentleAiConfigHome();
-		const globalConfigPath = join(configHome, "runtime-guardrails.json");
-		const projectConfigPath = join(cwd, ".pi", "gentle-ai", "runtime-guardrails.json");
-
-		let merged: RuntimeGuardrailsConfig = { autonomousMode: false, guardedCommands: {} };
-
-		if (existsSync(globalConfigPath)) {
-			const globalParsed = parseGuardrailsConfigFile(
-				readFileSync(globalConfigPath, "utf8"),
-			);
-			if (!globalParsed) return SAFE_GUARDRAILS_CONFIG;
-			merged = globalParsed;
+		let raw: string;
+		try { raw = read(path); }
+		catch (error) {
+			if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+			const malformed = { state: "malformed" as const };
+			cache.set(key, malformed);
+			return { source, path, identity: physical, ...malformed };
 		}
+		const parsed = parseGuardrailsConfigFile(raw);
+		const result = parsed === undefined ? { state: "malformed" as const } : { state: "valid" as const, config: parsed };
+		cache.set(key, result);
+		return { source, path, identity: physical, ...result };
+	};
+	const scope = (name: "global" | "project", canonicalPath: string, legacyPath: string): GuardrailScopeResolution => {
+		const cache = new Map<string, Pick<GuardrailFileCandidate, "state" | "config">>();
+		const canonical = inspect(cache, `canonical-${name}`, canonicalPath), legacy = inspect(cache, `legacy-${name}`, legacyPath);
+		const selected = canonical ?? legacy;
+		const sameFile = canonical !== undefined && legacy !== undefined && (canonical.path === legacy.path || (canonical.identity !== undefined && canonical.identity === legacy.identity));
+		const collision = canonical !== undefined && legacy !== undefined && !sameFile
+			? { canonical, legacy, equal: canonical.state === "valid" && legacy.state === "valid" && guardrailConfigKey(canonical.config!) === guardrailConfigKey(legacy.config!) }
+			: undefined;
+		return { selected, ...(collision === undefined ? {} : { collision }) };
+	};
+	const canonicalHome = options.shevanioPiConfigHome ?? (options.gentlePiConfigHome === undefined ? process.env.SHEVANIO_PI_CONFIG_HOME ?? join(homedir(), ".pi", "shevanio-pi") : join(dirname(options.gentlePiConfigHome), "shevanio-pi"));
+	const legacyHome = options.gentlePiConfigHome ?? gentleAiConfigHome();
+	const global = scope("global", join(canonicalHome, "runtime-guardrails.json"), join(legacyHome, "runtime-guardrails.json"));
+	if (global.selected?.state === "malformed") return { config: SAFE_GUARDRAILS_CONFIG, environmentOverride: false, global };
+	let config = global.selected?.config ?? { autonomousMode: false, guardedCommands: {} };
+	const project = scope("project", join(cwd, ".pi", "shevanio-pi", "runtime-guardrails.json"), join(cwd, ".pi", "gentle-ai", "runtime-guardrails.json"));
+	if (project.selected?.state === "malformed") return { config: SAFE_GUARDRAILS_CONFIG, environmentOverride: false, global, project };
+	if (project.selected?.config) config = { autonomousMode: project.selected.config.autonomousMode, guardedCommands: { ...config.guardedCommands, ...project.selected.config.guardedCommands } };
+	return { config, environmentOverride: false, global, project };
+}
 
-		if (existsSync(projectConfigPath)) {
-			const projectParsed = parseGuardrailsConfigFile(
-				readFileSync(projectConfigPath, "utf8"),
-			);
-			if (!projectParsed) return SAFE_GUARDRAILS_CONFIG;
-			// Project values fully override global values
-			merged = {
-				autonomousMode: projectParsed.autonomousMode,
-				guardedCommands: {
-					...merged.guardedCommands,
-					...projectParsed.guardedCommands,
-				},
-			};
+function runtimeGuardrailDiagnostics(resolution: RuntimeGuardrailsResolution): string[] {
+	if (resolution.environmentOverride) return ["pass: Runtime guardrails source legacy environment GENTLE_PI_AUTONOMOUS_MODE=1"];
+	const lines: string[] = [];
+	for (const [scope, result] of [["global", resolution.global], ["project", resolution.project]] as const) {
+		if (!result?.selected) continue;
+		const selected = result.selected;
+		lines.push(`${selected.state === "valid" ? "pass" : "fail"}: Runtime guardrails ${scope} source ${selected.source} file ${selected.path}${selected.state === "malformed" ? " is malformed or unreadable; safe defaults apply without fallback" : ""}`);
+		if (result.collision) {
+			const { canonical, legacy, equal } = result.collision;
+			lines.push(`${equal ? "info" : "warn"}: Runtime guardrails ${scope} ${equal ? "match" : "conflict"}: ${canonical.source} file ${canonical.path} and ${legacy.source} file ${legacy.path}; canonical wins`);
 		}
-
-		return merged;
-	} catch {
-		return SAFE_GUARDRAILS_CONFIG;
 	}
+	return lines.length === 0 ? ["pass: Runtime guardrails source built-in defaults"] : lines;
+}
+
+function loadRuntimeGuardrailsConfig(cwd: string, options: LoadGuardrailsOptions = {}): RuntimeGuardrailsConfig {
+	return resolveRuntimeGuardrailsConfig(cwd, options).config;
 }
 
 const PATH_GUARDED_TOOL_NAMES = new Set(["read", "write", "edit"]);
@@ -5215,6 +5248,8 @@ export const __testing = {
 	orderDiscoverableAgents,
 	classifyGuardedCommand,
 	loadRuntimeGuardrailsConfig,
+	resolveRuntimeGuardrailsConfig,
+	runtimeGuardrailDiagnostics,
 	buildGentlePrompt,
 	shouldInjectPersona,
 	parsePersonaDocument,
@@ -5677,6 +5712,7 @@ function createGentleAiExtensionForTesting(
 			const modelConfig = await readSavedModelConfigAsync(ctx.cwd);
 			const engramActive = hasWritableEngramTool(pi);
 			const devBinary = await describeDevBinaryOverride();
+			const guardrails = resolveRuntimeGuardrailsConfig(ctx.cwd);
 			const lines = [
 				"Shevanio Pi doctor",
 				`${agentsInstalled ? "pass" : "fail"}: Global SDD agents ${agentsInstalled ? "installed" : "missing"}`,
@@ -5687,6 +5723,7 @@ function createGentleAiExtensionForTesting(
 				`${skillRegistryPresent ? "pass" : "warn"}: Skill registry ${skillRegistryPresent ? "present" : "missing"}`,
 				`${modelConfig.status === "invalid" ? "fail" : "pass"}: Global model config ${modelConfig.status}`,
 				"pass: Sensitive-path guard active for read/write/edit tools",
+				...runtimeGuardrailDiagnostics(guardrails),
 				`${engramActive ? "pass" : "warn"}: Engram memory tools ${engramActive ? "active" : "not active in this session"}`,
 				...(devBinary.state === "active" ? [`warn: ${devBinary.line}`] : []),
 				...(devBinary.state === "invalid" ? [`fail: ${devBinary.line}`, "remedy: fix the dev binary override or clear it with /shevanio-pi:dev-binary off (or unset GENTLE_PI_GENTLE_AI_DEV_BINARY)"] : []),
@@ -5793,6 +5830,7 @@ function createGentleAiExtensionForTesting(
 			const localSddAgentOverrides = sddLocalAgentOverrideCount(ctx.cwd);
 			const modelConfig = await readModelConfigAsync(ctx.cwd);
 			const devBinary = await describeDevBinaryOverride();
+			const guardrailLines = runtimeGuardrailDiagnostics(resolveRuntimeGuardrailsConfig(ctx.cwd));
 			ctx.ui.notify(
 				[
 					"Shevanio Pi package is active.",
@@ -5813,8 +5851,9 @@ function createGentleAiExtensionForTesting(
 					`OpenSpec config: ${openspecConfigured ? "present" : "missing"}`,
 					`Global model config: ${existsSync(modelConfigPath(ctx.cwd)) ? "present" : "missing"}`,
 					...describeModelConfig(ctx.cwd, modelConfig),
+					...guardrailLines,
 				].join("\n"),
-				staleSddAssets > 0 || localSddAgentOverrides > 0 || devBinary.state !== "inactive" ? "warning" : "info",
+				staleSddAssets > 0 || localSddAgentOverrides > 0 || devBinary.state !== "inactive" || guardrailLines.some((line) => /^(?:warn|fail):/.test(line)) ? "warning" : "info",
 			);
 		},
 	});

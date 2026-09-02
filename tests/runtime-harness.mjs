@@ -222,6 +222,7 @@ async function run() {
 	process.env.GENTLE_PI_NO_SKILL_REGISTRY = "1";
 	process.env.GENTLE_PI_TEST_ASSETS_DIR = ambientTestAssetsDir;
 	process.env.PI_OFFLINE = "1";
+	delete process.env.GENTLE_PI_AUTONOMOUS_MODE;
 	const globalModelsPath = join(globalConfigHome, "models.json");
 	const globalSubagentsPath = join(globalAgentHome, "subagents.json");
 	const { pi, hooks, commands, flags, tools, emittedEvents } = createPi();
@@ -599,6 +600,26 @@ async function run() {
 	const toolCwd = await tempWorkspace();
 	try {
 		const toolHook = hooks.get("tool_call")[0];
+		const canonicalGlobalGuardrails = join(canonicalConfigHome, "runtime-guardrails.json");
+		const canonicalProjectGuardrails = join(toolCwd, ".pi", "shevanio-pi", "runtime-guardrails.json");
+		const legacyProjectGuardrails = join(toolCwd, ".pi", "gentle-ai", "runtime-guardrails.json");
+		const legacyGuardrailBytes = '{"autonomousMode":true,"guardedCommands":{"gitPush":"allow","gitRebase":"confirm","npmPublish":"block"},"preserve":"legacy"}\n';
+		await mkdir(dirname(canonicalGlobalGuardrails), { recursive: true });
+		await mkdir(dirname(legacyProjectGuardrails), { recursive: true });
+		await writeFile(canonicalGlobalGuardrails, '{"autonomousMode":true,"guardedCommands":{"gitPush":"block","gitRebase":"block","npmPublish":"allow"}}\n');
+		await writeFile(legacyProjectGuardrails, legacyGuardrailBytes);
+		assert.equal(await toolHook({ toolName: "bash", input: { command: "git push origin main" } }, createCtx(toolCwd)), undefined, "legacy project allow must outrank canonical global block");
+		const guardConfirm = await toolHook({ toolName: "bash", input: { command: "git rebase main" } }, createCtx(toolCwd, true));
+		assert.equal(guardConfirm.block, true); assert.match(guardConfirm.reason, /not confirmed/);
+		const guardBlock = await toolHook({ toolName: "bash", input: { command: "npm publish" } }, createCtx(toolCwd));
+		assert.equal(guardBlock.block, true); assert.match(guardBlock.reason, /destructive/);
+		await mkdir(dirname(canonicalProjectGuardrails), { recursive: true });
+		await writeFile(canonicalProjectGuardrails, '{"autonomousMode":true,"guardedCommands":{"gitPush":"block","gitRebase":"confirm","npmPublish":"block"}}\n');
+		assert.equal((await toolHook({ toolName: "bash", input: { command: "git push origin main" } }, createCtx(toolCwd))).block, true, "canonical project must outrank legacy project");
+		const guardrailStatus = createCtx(toolCwd, true); await commands.get("shevanio-pi:status").handler("", guardrailStatus);
+		assert.match(guardrailStatus.ui.notifications.at(-1).message, new RegExp(`canonical-project file ${canonicalProjectGuardrails.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+		assert.equal(await readFile(legacyProjectGuardrails, "utf8"), legacyGuardrailBytes);
+		await rm(canonicalGlobalGuardrails, { force: true }); await rm(join(toolCwd, ".pi"), { recursive: true, force: true }); emittedEvents.length = 0;
 		const ghPrCwd = await tempWorkspace();
 		try {
 			execFileSync("git", ["init"], { cwd: ghPrCwd, stdio: "ignore" });

@@ -575,6 +575,23 @@ Legacy string entries are still accepted and treated as `model`-only config.
 
 Package-owned global SDD runtime assets are also refreshed automatically on session start when `shevanio-pi` changes. Project-local `.pi/agents` and `.pi/chains` remain manual overrides and are never overwritten by startup refresh.
 
+### Runtime guardrail authority
+
+`GENTLE_PI_AUTONOMOUS_MODE === "1"` remains the exact highest-priority override and uses the existing autonomous defaults. There is no Shevanio autonomous-mode environment variable. Otherwise, runtime guardrails are read in this authority order:
+
+| Priority | Source |
+| -------- | ------ |
+| 1 | `<cwd>/.pi/shevanio-pi/runtime-guardrails.json` (canonical project) |
+| 2 | `<cwd>/.pi/gentle-ai/runtime-guardrails.json` (legacy project) |
+| 3 | `${SHEVANIO_PI_CONFIG_HOME ?? ~/.pi/shevanio-pi}/runtime-guardrails.json` (canonical global) |
+| 4 | `${GENTLE_PI_CONFIG_HOME ?? ~/.pi/gentle-ai}/runtime-guardrails.json` (legacy global) |
+
+Canonical wins over legacy within one scope, while project scope outranks global scope even when the project file is legacy and the global file is canonical. Resolution first loads the selected global file, then overlays the selected project file exactly as before: project `autonomousMode` replaces the global value, and recognized project `guardedCommands` replace matching global keys while other recognized global keys remain.
+
+The files retain the existing permissive, unversioned object shape; there is no schema identifier. Only `ENOENT` means missing. A present malformed or unreadable winning file activates the existing whole-config safe behavior and never falls through, including legacy-only installations. Distinct same-scope canonical and legacy files are reported by `/shevanio-pi:doctor` and `/shevanio-pi:status`: equal normalized values are informational and conflicts warn, with both sources and paths named. Same-scope aliases to the same existing physical regular file are read once and do not report a collision; non-regular targets are malformed authority and are not read.
+
+Guardrail resolution is read-only: it never creates, copies, migrates, merges, rewrites, moves, or deletes either file, and it adds no canonical environment or schema. Every Bash tool call rereads authority; there is no cache or watcher. Command matching keeps the existing first-match behavior, so a compound command is classified by the first recognized guarded command rather than by independently combining every segment.
+
 ### Background subagents policy
 
 Background delegation is off unless you turn it on. The policy is user-owned: only an explicit `/shevanio-pi:background-subagents enable` or `disable` writes it, and Pi automation never toggles it.

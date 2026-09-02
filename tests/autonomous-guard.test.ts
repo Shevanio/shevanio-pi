@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -319,6 +319,128 @@ test("loadRuntimeGuardrailsConfig: invalid project config fails safe (autonomous
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
 	}
+});
+
+test("runtime guardrail authority reads all four canonical and legacy positions", () => {
+	const dir = makeTmpDir();
+	try {
+		for (const source of ["canonical-global", "legacy-global", "canonical-project", "legacy-project"] as const) {
+			const root = join(dir, source), cwd = join(root, "project"), canonicalHome = join(root, "canonical"), legacyHome = join(root, "legacy");
+			const path = source.endsWith("global")
+				? join(source.startsWith("canonical") ? canonicalHome : legacyHome, "runtime-guardrails.json")
+				: join(cwd, ".pi", source.startsWith("canonical") ? "shevanio-pi" : "gentle-ai", "runtime-guardrails.json");
+			mkdirSync(dirname(path), { recursive: true });
+			writeFileSync(path, '{"autonomousMode":true,"guardedCommands":{"gitPush":"allow"}}');
+			const resolved = __testing.resolveRuntimeGuardrailsConfig(cwd, { shevanioPiConfigHome: canonicalHome, gentlePiConfigHome: legacyHome });
+			assert.equal((source.endsWith("global") ? resolved.global : resolved.project)?.selected?.source, source);
+			assert.deepEqual(resolved.config, { autonomousMode: true, guardedCommands: { gitPush: "allow" } });
+		}
+	} finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("canonical files win within both scopes and diagnostics report conflicts", () => {
+	const dir = makeTmpDir(), cwd = join(dir, "project"), canonicalHome = join(dir, "canonical"), legacyHome = join(dir, "legacy");
+	try {
+		writeConfig(canonicalHome, "runtime-guardrails.json", { autonomousMode: true, guardedCommands: { gitRebase: "allow" } });
+		writeConfig(legacyHome, "runtime-guardrails.json", { autonomousMode: true, guardedCommands: { gitRebase: "block" } });
+		writeConfig(cwd, join(".pi", "shevanio-pi", "runtime-guardrails.json"), { autonomousMode: false, guardedCommands: { gitPush: "block" } });
+		writeConfig(cwd, join(".pi", "gentle-ai", "runtime-guardrails.json"), { autonomousMode: true, guardedCommands: { gitPush: "allow" } });
+		const resolved = __testing.resolveRuntimeGuardrailsConfig(cwd, { shevanioPiConfigHome: canonicalHome, gentlePiConfigHome: legacyHome });
+		assert.deepEqual(resolved.config, { autonomousMode: false, guardedCommands: { gitRebase: "allow", gitPush: "block" } });
+		assert.equal(resolved.global?.selected?.source, "canonical-global");
+		assert.equal(resolved.project?.selected?.source, "canonical-project");
+		assert.equal(__testing.runtimeGuardrailDiagnostics(resolved).filter((line) => line.startsWith("warn:")).length, 2);
+	} finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("legacy project overlays canonical global with the existing exact merge", () => {
+	const dir = makeTmpDir(), cwd = join(dir, "project"), canonicalHome = join(dir, "canonical"), legacyHome = join(dir, "legacy");
+	try {
+		writeConfig(canonicalHome, "runtime-guardrails.json", { autonomousMode: true, guardedCommands: { gitPush: "block", npmPublish: "confirm" } });
+		writeConfig(cwd, join(".pi", "gentle-ai", "runtime-guardrails.json"), { autonomousMode: false, guardedCommands: { gitPush: "allow" } });
+		const resolved = __testing.resolveRuntimeGuardrailsConfig(cwd, { shevanioPiConfigHome: canonicalHome, gentlePiConfigHome: legacyHome });
+		assert.equal(resolved.project?.selected?.source, "legacy-project");
+		assert.deepEqual(resolved.config, { autonomousMode: false, guardedCommands: { gitPush: "allow", npmPublish: "confirm" } });
+	} finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("equal normalized same-scope files are informational", () => {
+	const dir = makeTmpDir(), canonicalHome = join(dir, "canonical"), legacyHome = join(dir, "legacy");
+	try {
+		writeConfig(canonicalHome, "runtime-guardrails.json", { autonomousMode: true, guardedCommands: { gitPush: "allow" }, canonicalOnly: true });
+		writeConfig(legacyHome, "runtime-guardrails.json", { guardedCommands: { ignored: "block", gitPush: "allow" }, autonomousMode: true });
+		const resolved = __testing.resolveRuntimeGuardrailsConfig(join(dir, "project"), { shevanioPiConfigHome: canonicalHome, gentlePiConfigHome: legacyHome });
+		assert.match(__testing.runtimeGuardrailDiagnostics(resolved).join("\n"), /^info: Runtime guardrails global match:.*canonical-global.*legacy-global/m);
+	} finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("malformed or unreadable winning canonical authority never falls through", () => {
+	const dir = makeTmpDir();
+	try {
+		for (const scope of ["global", "project"] as const) {
+			const root = join(dir, scope), cwd = join(root, "project"), canonicalHome = join(root, "canonical"), legacyHome = join(root, "legacy");
+			const canonical = scope === "global" ? join(canonicalHome, "runtime-guardrails.json") : join(cwd, ".pi", "shevanio-pi", "runtime-guardrails.json");
+			const legacy = scope === "global" ? join(legacyHome, "runtime-guardrails.json") : join(cwd, ".pi", "gentle-ai", "runtime-guardrails.json");
+			mkdirSync(dirname(canonical), { recursive: true }); mkdirSync(dirname(legacy), { recursive: true });
+			writeFileSync(canonical, "{bad json"); writeFileSync(legacy, '{"autonomousMode":true,"guardedCommands":{"gitPush":"allow"}}');
+			const resolved = __testing.resolveRuntimeGuardrailsConfig(cwd, { shevanioPiConfigHome: canonicalHome, gentlePiConfigHome: legacyHome });
+			assert.deepEqual(resolved.config, { autonomousMode: false, guardedCommands: {} });
+			assert.match(__testing.runtimeGuardrailDiagnostics(resolved).join("\n"), new RegExp(`fail: Runtime guardrails ${scope} source canonical-${scope} file`));
+		}
+		const root = join(dir, "unreadable"), canonicalHome = join(root, "canonical"), legacyHome = join(root, "legacy"), canonical = join(canonicalHome, "runtime-guardrails.json");
+		writeConfig(canonicalHome, "runtime-guardrails.json", { autonomousMode: true }); writeConfig(legacyHome, "runtime-guardrails.json", { autonomousMode: true, guardedCommands: { gitPush: "allow" } });
+		const resolved = __testing.resolveRuntimeGuardrailsConfig(join(root, "project"), { shevanioPiConfigHome: canonicalHome, gentlePiConfigHome: legacyHome, readFile(path) { if (path === canonical) throw Object.assign(new Error("denied"), { code: "EACCES" }); return readFileSync(path, "utf8"); } });
+		assert.deepEqual(resolved.config, { autonomousMode: false, guardedCommands: {} });
+	} finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("canonical and legacy aliases to one existing file are read once without collision", () => {
+	const dir = makeTmpDir(), cwd = join(dir, "project"), sharedHome = join(dir, "shared");
+	try {
+		const shared = join(sharedHome, "runtime-guardrails.json");
+		writeConfig(sharedHome, "runtime-guardrails.json", { autonomousMode: true, guardedCommands: { gitPush: "allow" } });
+		let reads = 0;
+		const samePath = __testing.resolveRuntimeGuardrailsConfig(cwd, { shevanioPiConfigHome: sharedHome, gentlePiConfigHome: sharedHome, readFile(path) { if (path === shared) reads += 1; return readFileSync(path, "utf8"); } });
+		assert.equal(reads, 1); assert.equal(samePath.global?.collision, undefined);
+		if (process.platform !== "win32") {
+			const canonicalHome = join(dir, "hardlink-canonical"), legacyHome = join(dir, "hardlink-legacy"), canonical = join(canonicalHome, "runtime-guardrails.json"), legacy = join(legacyHome, "runtime-guardrails.json");
+			writeConfig(canonicalHome, "runtime-guardrails.json", { autonomousMode: true }); mkdirSync(legacyHome); linkSync(canonical, legacy); reads = 0;
+			const sameInode = __testing.resolveRuntimeGuardrailsConfig(cwd, { shevanioPiConfigHome: canonicalHome, gentlePiConfigHome: legacyHome, readFile(path) { if (path === canonical || path === legacy) reads += 1; return readFileSync(path, "utf8"); } });
+			assert.equal(reads, 1); assert.equal(sameInode.global?.collision, undefined);
+		}
+	} finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("physical-file deduplication never reuses bytes across global and project scopes", () => {
+	const dir = makeTmpDir(), cwd = join(dir, "project"), canonicalHome = join(dir, "canonical"), legacyHome = join(dir, "legacy");
+	const global = join(canonicalHome, "runtime-guardrails.json"), project = join(cwd, ".pi", "shevanio-pi", "runtime-guardrails.json"), reads: string[] = [];
+	try {
+		const resolved = __testing.resolveRuntimeGuardrailsConfig(cwd, {
+			shevanioPiConfigHome: canonicalHome,
+			gentlePiConfigHome: legacyHome,
+			fileMetadata(path) { return path === global || path === project ? { identity: "raced-project-inode", regular: true } : undefined; },
+			readFile(path) {
+				reads.push(path);
+				if (path === global) return '{"autonomousMode":true,"guardedCommands":{"gitPush":"allow"}}';
+				if (path === project) return '{"autonomousMode":true,"guardedCommands":{"gitPush":"block"}}';
+				throw Object.assign(new Error("missing"), { code: "ENOENT" });
+			},
+		});
+		assert.deepEqual(reads.filter((path) => path === global || path === project), [global, project]);
+		assert.equal(classifyGuardedCommand("git push origin main", resolved.config), "block");
+	} finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("an existing non-regular guardrail target is malformed without being read", () => {
+	const dir = makeTmpDir(), cwd = join(dir, "project"), canonicalHome = join(dir, "canonical"), target = join(canonicalHome, "runtime-guardrails.json");
+	try {
+		mkdirSync(target, { recursive: true });
+		let targetReads = 0;
+		const resolved = __testing.resolveRuntimeGuardrailsConfig(cwd, { shevanioPiConfigHome: canonicalHome, gentlePiConfigHome: join(dir, "legacy"), readFile(path) { if (path === target) targetReads += 1; return readFileSync(path, "utf8"); } });
+		assert.equal(targetReads, 0);
+		assert.deepEqual(resolved.config, { autonomousMode: false, guardedCommands: {} });
+		assert.match(__testing.runtimeGuardrailDiagnostics(resolved).join("\n"), /canonical-global.*malformed or unreadable/);
+	} finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 // ---------------------------------------------------------------------------

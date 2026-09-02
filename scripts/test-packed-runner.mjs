@@ -105,6 +105,7 @@ try {
 	const runtimeCwd = join(temporary, "runtime-cwd"), runtimeAgentDir = join(temporary, "runtime-agent"), runtimeHome = join(temporary, "runtime-home");
 	for (const path of [runtimeCwd, runtimeAgentDir, runtimeHome]) mkdirSync(path);
 	Object.assign(process.env, { HOME: runtimeHome, USERPROFILE: runtimeHome, SHEVANIO_PI_CONFIG_HOME: join(runtimeHome, "shevanio-config"), GENTLE_PI_CONFIG_HOME: join(runtimeHome, "config"), GENTLE_PI_AGENT_HOME: runtimeAgentDir, GENTLE_PI_NO_SKILL_REGISTRY: "1", PI_OFFLINE: "1" });
+	delete process.env.GENTLE_PI_AUTONOMOUS_MODE;
 	process.chdir(runtimeCwd);
 	const loader = new DefaultResourceLoader({ cwd: runtimeCwd, agentDir: runtimeAgentDir, additionalExtensionPaths: ["ask-user-choice.ts", "codegraph-tools.ts", "gentle-ai.ts", "pi-pretty.ts", "quiet-tools.ts", "sdd-init.ts", "skill-registry.ts", "startup-banner.ts"].map((path) => join(packageRoot, "extensions", path)), noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true });
 	await loader.reload();
@@ -126,7 +127,21 @@ try {
 	if (JSON.stringify(reviewTools) !== JSON.stringify(["shevanio_review", "shevanio_review_capture", "shevanio_review_scope"])) throw new Error(`packed review tool identities changed: ${reviewTools.join(", ")}`);
 	for (const name of ["gentle_review", "gentle_review_capture", "gentle_review_scope"]) if (registeredToolNames.includes(name)) throw new Error(`packed legacy review tool must not be registered: ${name}`);
 	const choices = [], pickers = [], notices = [];
-	runner.setUIContext({ ...runner.getUIContext(), notify(message, type = "info") { notices.push({ message, type }); }, async select(label, options) { pickers.push({ label, options }); return choices.shift() ?? options[0]; }, async input(_label, placeholder) { return placeholder; } });
+	runner.setUIContext({ ...runner.getUIContext(), notify(message, type = "info") { notices.push({ message, type }); }, async confirm() { return false; }, async select(label, options) { pickers.push({ label, options }); return choices.shift() ?? options[0]; }, async input(_label, placeholder) { return placeholder; } });
+	const canonicalGlobalGuardrails = join(process.env.SHEVANIO_PI_CONFIG_HOME, "runtime-guardrails.json"), canonicalProjectGuardrails = join(runtimeCwd, ".pi", "shevanio-pi", "runtime-guardrails.json"), legacyProjectGuardrails = join(runtimeCwd, ".pi", "gentle-ai", "runtime-guardrails.json");
+	const legacyGuardrailBytes = '{"autonomousMode":true,"guardedCommands":{"gitPush":"allow","gitRebase":"confirm","npmPublish":"block"},"preserve":"legacy"}\n';
+	mkdirSync(dirname(canonicalGlobalGuardrails), { recursive: true }); mkdirSync(dirname(legacyProjectGuardrails), { recursive: true });
+	writeFileSync(canonicalGlobalGuardrails, '{"autonomousMode":true,"guardedCommands":{"gitPush":"block","gitRebase":"block","npmPublish":"allow"}}\n'); writeFileSync(legacyProjectGuardrails, legacyGuardrailBytes);
+	const emitBash = (id, command) => runner.emitToolCall({ type: "tool_call", toolCallId: id, toolName: "bash", input: { command } });
+	if (await emitBash("packed-guard-allow", "git push origin main") !== undefined) throw new Error("packed legacy project did not outrank canonical global for allow");
+	const packedConfirm = await emitBash("packed-guard-confirm", "git rebase main");
+	if (packedConfirm?.block !== true || !/not confirmed/.test(packedConfirm.reason ?? "")) throw new Error("packed legacy project did not preserve confirm");
+	const packedBlock = await emitBash("packed-guard-block", "npm publish");
+	if (packedBlock?.block !== true || !/destructive/.test(packedBlock.reason ?? "")) throw new Error("packed legacy project did not preserve block");
+	mkdirSync(dirname(canonicalProjectGuardrails), { recursive: true }); writeFileSync(canonicalProjectGuardrails, '{"autonomousMode":true,"guardedCommands":{"gitPush":"block"}}\n');
+	if ((await emitBash("packed-canonical-project", "git push origin main"))?.block !== true) throw new Error("packed canonical project did not outrank legacy project");
+	if (readFileSync(legacyProjectGuardrails, "utf8") !== legacyGuardrailBytes) throw new Error("packed guardrail resolution changed legacy bytes");
+	for (const path of [canonicalGlobalGuardrails, canonicalProjectGuardrails, legacyProjectGuardrails]) rmSync(path, { force: true });
 	const canonicalGlobalPersona = join(process.env.SHEVANIO_PI_CONFIG_HOME, "persona.json"), legacyGlobalPersona = join(process.env.GENTLE_PI_CONFIG_HOME, "persona.json");
 	const canonicalProjectPersona = join(runtimeCwd, ".pi", "shevanio-pi", "persona.json"), legacyProjectPersona = join(runtimeCwd, ".pi", "gentle-ai", "persona.json");
 	const legacyGlobalBytes = '{"mode":"neutral","preserve":true}\n', legacyProjectBytes = '{"mode":"gentleman","preserve":true}\n';
@@ -157,7 +172,7 @@ try {
 	if (!compatibilitySkill.includes(PARENT_PACKAGE_MODEL) || !/^name: gentle-ai$/m.test(compatibilitySkill) || /\bel Gentleman\b/.test(compatibilitySkill)) throw new Error("packed compatibility skill identity failed");
 	await runner.emit({ type: "session_shutdown", reason: "quit" });
 	const packageManifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
-	process.stdout.write(`packed package E2E passed (shevanio-pi ${packageManifest.version ?? "unknown"}; 13 canonical commands + deprecated aliases; persona authority verified; bundled Gentle AI contract fixture ${decoded.packageVersion ?? "unknown"}; provider install skipped)\n`);
+	process.stdout.write(`packed package E2E passed (shevanio-pi ${packageManifest.version ?? "unknown"}; 13 canonical commands + deprecated aliases; guardrail and persona authority verified; bundled Gentle AI contract fixture ${decoded.packageVersion ?? "unknown"}; provider install skipped)\n`);
 } finally {
 	process.chdir(originalCwd);
 	rmSync(temporary, { recursive: true, force: true });
