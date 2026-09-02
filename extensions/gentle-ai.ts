@@ -1142,7 +1142,7 @@ function evaluateSensitivePathTool(
 	if (!sensitivePath) return undefined;
 	return {
 		block: true,
-		reason: `Gentle AI safety policy blocked access to sensitive path: ${sanitizeTerminalText(sensitivePath)}. Ask the user for an explicit safer plan.`,
+		reason: `Shevanio Pi safety policy blocked access to sensitive path: ${sanitizeTerminalText(sensitivePath)}. Ask the user for an explicit safer plan.`,
 	};
 }
 
@@ -1218,7 +1218,7 @@ async function confirmCommand(
 		return {
 			block: true,
 			reason:
-				"Gentle AI safety policy blocked a destructive shell command. Ask the user for an explicit safer plan.",
+				"Shevanio Pi safety policy blocked a destructive shell command. Ask the user for an explicit safer plan.",
 		};
 	}
 
@@ -1232,7 +1232,7 @@ async function confirmCommand(
 		return {
 			block: true,
 			reason:
-				"Gentle AI safety policy requires interactive confirmation before this command.",
+				"Shevanio Pi safety policy requires interactive confirmation before this command.",
 		};
 	}
 	const preview = truncateToWidth(
@@ -1248,7 +1248,7 @@ async function confirmCommand(
 			requestId,
 			state,
 			source: "tool_call",
-			message: "Gentle AI safety policy requires confirmation for this tool call.",
+			message: "Shevanio Pi safety policy requires confirmation for this tool call.",
 			toolName: "bash",
 		});
 	};
@@ -1274,7 +1274,7 @@ async function confirmCommand(
 	return {
 		block: true,
 		reason:
-			"Gentle AI safety policy blocked the command because it was not confirmed.",
+			"Shevanio Pi safety policy blocked the command because it was not confirmed.",
 	};
 }
 
@@ -2462,7 +2462,7 @@ async function handleModelsCommand(ctx: ExtensionContext): Promise<void> {
 	const savedConfig = await readSavedModelConfigAsync(ctx.cwd);
 	if (savedConfig.status === "invalid") {
 		ctx.ui.notify(
-			`el Gentleman cannot open model config because ${savedConfig.path} is invalid JSON or not an object. Fix or remove the file, then run /shevanio-pi:models again.`,
+			`Shevanio Pi cannot open model config because ${savedConfig.path} is invalid JSON or not an object. Fix or remove the file, then run /shevanio-pi:models again.`,
 			"warning",
 		);
 		return;
@@ -2474,7 +2474,7 @@ async function handleModelsCommand(ctx: ExtensionContext): Promise<void> {
 		if (result.type === "export") {
 			try {
 				const count = await exportSavedModelConfig(ctx);
-				ctx.ui.notify(`el Gentleman exported ${count} saved model routing entr${count === 1 ? "y" : "ies"} to ${modelExportPath(ctx.cwd)}.`, "info");
+				ctx.ui.notify(`Shevanio Pi exported ${count} saved model routing entr${count === 1 ? "y" : "ies"} to ${modelExportPath(ctx.cwd)}.`, "info");
 			} catch (error) {
 				ctx.ui.notify(`Model routing export failed: ${error instanceof Error ? error.message : String(error)}`, "warning");
 			}
@@ -2501,14 +2501,14 @@ async function handleModelsCommand(ctx: ExtensionContext): Promise<void> {
 				try {
 					const applyResult = await applyModelConfigAsync(ctx.cwd, restored);
 					ctx.ui.notify([
-						"el Gentleman restored global model config.",
+						"Shevanio Pi restored global model config.",
 						`Import: ${modelExportPath(ctx.cwd)}`,
 						`Global config: ${modelConfigPath(ctx.cwd)}`,
 						`Agents updated: ${applyResult.updated}`,
 					].join("\n"), "info");
 				} catch (error) {
 					ctx.ui.notify([
-						"el Gentleman restored global model config, but applying it to agents failed.",
+						"Shevanio Pi restored global model config, but applying it to agents failed.",
 						`Global config: ${modelConfigPath(ctx.cwd)}`,
 						`Apply error: ${error instanceof Error ? error.message : String(error)}`,
 					].join("\n"), "warning");
@@ -2563,7 +2563,7 @@ async function handleModelsCommand(ctx: ExtensionContext): Promise<void> {
 	const applyResult = await applyModelConfigAsync(ctx.cwd, result.config);
 	ctx.ui.notify(
 		[
-			"el Gentleman global model config saved.",
+			"Shevanio Pi global model config saved.",
 			`Global config: ${modelConfigPath(ctx.cwd)}`,
 			`Agents updated: ${applyResult.updated}`,
 			...describeModelConfig(ctx.cwd, result.config),
@@ -5434,14 +5434,14 @@ function createGentleAiExtensionForTesting(
 			const modelResult = await applySavedModelConfig(ctx);
 			if (ctx.hasUI && modelResult.invalidPath) {
 				ctx.ui.notify(
-					`el Gentleman skipped model config because ${modelResult.invalidPath} is invalid JSON or not an object. Fix or remove the file, then run /shevanio-pi:models again.`,
+					`Shevanio Pi skipped model config because ${modelResult.invalidPath} is invalid JSON or not an object. Fix or remove the file, then run /shevanio-pi:models again.`,
 					"warning",
 				);
 				return;
 			}
 			if (ctx.hasUI && modelResult.updated > 0) {
 				ctx.ui.notify(
-					`el Gentleman applied SDD model config to ${modelResult.updated} agent(s). Global SDD assets ready: ${installResult.agents} new agent(s), ${installResult.chains} new chain(s), ${installResult.support} new support file(s).`,
+					`Shevanio Pi applied SDD model config to ${modelResult.updated} agent(s). Global SDD assets ready: ${installResult.agents} new agent(s), ${installResult.chains} new chain(s), ${installResult.support} new support file(s).`,
 					"info",
 				);
 			}
@@ -5450,7 +5450,7 @@ function createGentleAiExtensionForTesting(
 				const message =
 					error instanceof Error ? error.message : String(error);
 				ctx.ui.notify(
-					`el Gentleman model config sweep failed: ${message}`,
+					`Shevanio Pi model config sweep failed: ${message}`,
 					"warning",
 				);
 			}
@@ -5586,7 +5586,7 @@ function createGentleAiExtensionForTesting(
 	});
 
 	registerCanonicalCommand(pi, "models", {
-		description: "Configure global per-agent models for el Gentleman.",
+		description: "Configure global per-agent models for Shevanio Pi.",
 		handler: async (_args, ctx) => {
 			await handleModelsCommand(ctx);
 		},
