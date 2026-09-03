@@ -13,6 +13,8 @@ Pi already has strong tools. Shevanio Pi adds workflow discipline, keeps review 
 
 The canonical repository for the Shevanio Pi package is [Shevanio/shevanio-pi](https://github.com/Shevanio/shevanio-pi).
 
+**Start here:** [install from source](#install-from-source), [contribute](CONTRIBUTING.md), or [operate CI](docs/ci.md).
+
 > **Publication status:** `shevanio-pi` is not yet available from npm. Canonical npm installation commands will be documented only after publication is independently verified.
 
 > **Transitional compatibility identifiers:** `GENTLE_PI_*`, `.pi/gentle-ai`, `.gentle-ai/`, `gentle-ai` installer/binary names, and `gentle-pi.*` schema names remain compatibility surfaces; they are not canonical package or repository coordinates.
@@ -55,11 +57,31 @@ Most coding-agent sessions fail for operational reasons, not model reasons:
 
 **Migration note:** Do not enable `pi-tool-cards` and `quiet-tools` together: Pi rejects duplicate `bash`, `read`, `edit`, and `write` registrations. Disable or remove the standalone package during migration; `shevanio-pi` does not alter user configuration or delete that repository.
 
-## Installation status
+## Install from source
 
-`shevanio-pi` is not yet published on npm. Do not use or circulate a canonical npm install command until the package name, provenance, and registry artifact have been verified after publication.
+The canonical packages are not published on npm. Use the source repository for Shevanio Pi; there is no usable canonical npm command for either package.
 
-For existing users only, `gentle-pi` is a transitional compatibility package. It is not the canonical product and is not a recommendation for new installations.
+| Package | npm status checked 2026-09-03 | Meaning |
+| --- | --- | --- |
+| `shevanio-pi` | Unpublished | Canonical package/runtime identity. Install from the canonical Git repository for evaluation or development. |
+| `shevanio-engram` | Unpublished | Canonical memory-package identity. No canonical installation command is available. |
+| `gentle-pi` | Published upstream | Transitional compatibility package for existing deployments, not the canonical product or a new-install recommendation. |
+| `gentle-engram` | Published upstream | Transitional compatibility package used by some existing memory integrations, not the canonical memory identity. |
+
+Review package source before installation because Pi packages execute with the user's permissions. With Pi already installed, the supported Git-source form is:
+
+```bash
+pi install https://github.com/Shevanio/shevanio-pi
+```
+
+Then start Pi in the target project and verify the package identity:
+
+```text
+pi
+/shevanio-pi:status
+```
+
+For a contributor checkout and local verification, follow [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Recommended companion packages:
 
@@ -529,13 +551,15 @@ Recommended model/effort shape:
 | Verify / review            | Strong fresh-context model.                          | `high`                          |
 | Tiny utilities             | Inherit active/default model unless they bottleneck. | `inherit`                       |
 
-Saved globally at:
+Saved globally at this transitional compatibility path:
 
 ```text
 ~/.pi/gentle-ai/models.json
 ```
 
 Existing project-local `.pi/gentle-ai/models.json` files are still read as a legacy fallback when no global model config exists, but `/shevanio-pi:models` writes the shared global config.
+
+Model routing, dev-binary registration, and installed SDD support assets are compatibility exceptions that still write beneath legacy-named locations in the current runtime. By default, new preference, persona, guardrail, background-subagent, and banner writes target `.pi/shevanio-pi` or `~/.pi/shevanio-pi`; an explicit legacy config-home environment selector can redirect a global write for compatibility. Discovered legacy files for those migrated surfaces are read-only fallbacks.
 
 Inside `/shevanio-pi:models`, press `x` to export the saved routing to `~/.pi/gentle-ai/models.export.json`, or `r` to restore from that file after confirmation. Export uses a versioned envelope and restore writes the normal `models.json` shape before applying routing to agents.
 
@@ -544,14 +568,16 @@ Config shape (per agent):
 ```json
 {
   "sdd-design": {
-    "model": "anthropic/claude-sonnet-4",
+    "model": "provider/model-id",
     "thinking": "high"
   },
   "sdd-archive": {
-    "model": "openai/gpt-5-mini"
+    "model": "provider/fast-model-id"
   }
 }
 ```
+
+The picker uses the models exposed by the active Pi runtime. These placeholders describe the stored shape, not a bundled provider or model recommendation.
 
 Legacy string entries are still accepted and treated as `model`-only config.
 
@@ -693,27 +719,27 @@ Memory contract for SDD delegation:
 | `skills/`                      | Shevanio Pi delivery and collaboration skills.                                                              |
 | `prompts/`                     | The `/skill-creation` prompt template.                                                                     |
 | `docs/skill-style-guide.md`    | Normative style guide used by the packaged skill creation/improvement skills.                              |
+| `docs/ci.md`                   | CI triggers, the exact `verify` contract, local equivalents, branch protection, and publication gate status. |
 | `docs/native-authority-architecture.md` | Post-U8 ownership boundary, reproducible slimming metrics, Windows evidence, exact #191 seam, and the `review-integration/v1`→`v2` migration status, including the "compact-v2" naming disambiguation.     |
 | `docs/review-integration.md`   | Negotiated provider/consumer contract and the current shevanio-pi adoption boundary.                       |
 
 ## Development
 
-Install from this repo:
+Prepare a development checkout:
 
 ```bash
-pi install .
+git clone https://github.com/Shevanio/shevanio-pi.git
+cd shevanio-pi
+pnpm install --frozen-lockfile
 ```
 
-Validate before publishing:
+Run the package-facing check used by CI after making documentation or packaging changes:
 
 ```bash
-pnpm test
-bun build extensions/skill-registry.ts --target=node --format=esm --outfile=/tmp/skill-registry.js
-node --experimental-strip-types --check extensions/gentle-ai.ts
-node --experimental-strip-types --check extensions/sdd-init.ts
-node --experimental-strip-types --check extensions/startup-banner.ts
-npm pack --dry-run
+node scripts/verify-package-files.mjs
 ```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the pull-request path and [docs/ci.md](docs/ci.md) for the full local equivalent of the required `verify` job.
 
 ### Running the cross-lane battery
 
@@ -745,23 +771,7 @@ It prints one PASS/FAIL/SKIP row per check plus a note, and exits non-zero when 
 
 Running this battery against new gentle-ai builds (release candidates or main) and reporting red checks is a valuable contribution. The sibling provider-side battery lives at `scripts/cross-lane-battery.sh` in [Gentleman-Programming/gentle-ai](https://github.com/Gentleman-Programming/gentle-ai).
 
-The manual publication workflow remains safety-gated. Do not dispatch it until canonical npm publication is explicitly approved and ready for independent verification:
-
-```bash
-version="$(node -p "require('./package.json').version")"
-tag="v${version}"
-git fetch --no-tags origin "refs/tags/${tag}"
-test "$(git rev-parse 'FETCH_HEAD^{commit}')" = "$(git rev-parse "${tag}^{commit}")"
-gh workflow run publish.yml \
-  --repo Shevanio/shevanio-pi \
-  --ref main \
-  -f tag="${tag}"
-gh run watch <run-id> --repo Shevanio/shevanio-pi --exit-status
-npm view shevanio-pi@<version> version --registry=https://registry.npmjs.org/
-npm dist-tag ls shevanio-pi --registry=https://registry.npmjs.org/
-```
-
-Do not run `npm publish` locally for `shevanio-pi`. Dispatch the trusted workflow definition only from protected default `main` and provide its sole `tag` input. The workflow requires an exact annotated `vSemVer` tag whose peeled commit, current remote `main`, dispatch/main workflow commit, checkout, and `package.json` version are identical. It rechecks remote tag and `main` immediately before publishing through OIDC with provenance and environment protection; an advanced `main` requires a new release version, never a moved tag.
+The manual publication workflow remains safety-gated and currently non-operational: the repository has no `npm` environment, and npm trusted publishing has not been separately authorized or configured. Do not dispatch `.github/workflows/publish.yml` or run `npm publish` locally. See [docs/ci.md](docs/ci.md#publication-workflow) for the current gate boundary; release preparation begins only after separate maintainer authorization and registry setup.
 
 ## Principles
 

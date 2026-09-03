@@ -21,7 +21,7 @@ Use this skill when:
 1. **Every PR MUST link an approved issue** — no exceptions
 2. **Every PR MUST have exactly one `type:*` label**
 3. **Automated checks must pass** before merge is possible
-4. **Blank PRs without issue linkage will be blocked** by GitHub Actions
+4. **The exact required CI check is `verify`**; issue and label requirements remain repository policy
 
 ---
 
@@ -31,7 +31,7 @@ Use this skill when:
 1. Verify issue has `status:approved` label
 2. Create branch: type/description (see Branch Naming below)
 3. Implement changes with conventional commits
-4. Run shellcheck on modified scripts
+4. Run the cheapest relevant local checks
 5. Open PR using the template
 6. Add exactly one type:* label
 7. Wait for automated checks to pass
@@ -80,16 +80,13 @@ The linked issue MUST have the `status:approved` label.
 
 ### 2. PR Type (REQUIRED)
 
-Check exactly ONE in the template and add the matching label:
+Select exactly one existing `type:*` label. The current repository taxonomy includes:
 
 | Checkbox | Label to add |
 |----------|-------------|
 | Bug fix | `type:bug` |
 | New feature | `type:feature` |
 | Documentation only | `type:docs` |
-| Code refactoring | `type:refactor` |
-| Maintenance/tooling | `type:chore` |
-| Breaking change | `type:breaking-change` |
 
 ### 3. Summary
 
@@ -106,9 +103,9 @@ Check exactly ONE in the template and add the matching label:
 ### 5. Test Plan
 
 ```markdown
-- [x] Scripts run without errors: `shellcheck scripts/*.sh`
-- [x] Manually tested the affected functionality
-- [x] Skills load correctly in target agent
+- [x] Recorded exact local checks and outcomes
+- [x] Recorded runtime-harness evidence, or N/A with a reason
+- [x] Named the exact rollback boundary
 ```
 
 ### 6. Contributor Checklist
@@ -116,8 +113,8 @@ Check exactly ONE in the template and add the matching label:
 All boxes must be checked:
 - Linked an approved issue
 - Added exactly one `type:*` label
-- Ran shellcheck on modified scripts
-- Skills tested in at least one agent
+- Recorded the relevant local verification
+- Recorded runtime-harness evidence or N/A
 - Docs updated if behavior changed
 - Conventional commit format
 - No `Co-Authored-By` trailers
@@ -126,12 +123,11 @@ All boxes must be checked:
 
 ## Automated Checks (all must pass)
 
-| Check | Job name | What it verifies |
-|-------|----------|-----------------|
-| PR Validation | `Check Issue Reference` | Body contains `Closes/Fixes/Resolves #N` |
-| PR Validation | `Check Issue Has status:approved` | Linked issue has `status:approved` |
-| PR Validation | `Check PR Has type:* Label` | PR has exactly one `type:*` label |
-| CI | `Shellcheck` | Shell scripts pass `shellcheck` |
+| Workflow | Required check | What it verifies |
+|----------|----------------|------------------|
+| `CI` | `verify` | Frozen install, tests with required native binary, generated runtime modules, package contents, and packed installation |
+
+`main` requires the live GitHub Actions `verify` context with strict/up-to-date checks. Issue linkage, approval, and exactly one `type:*` label are repository policy checks represented by the PR template; the current CI workflow does not automate them. See `docs/ci.md`.
 
 ---
 
@@ -150,22 +146,7 @@ Commit messages MUST match this regex:
 - `!` — optional, indicates breaking change
 - `description` — required, starts after `: `
 
-Type-to-label mapping:
-
-| Commit type | PR label |
-|-------------|----------|
-| `feat` | `type:feature` |
-| `fix` | `type:bug` |
-| `docs` | `type:docs` |
-| `refactor` | `type:refactor` |
-| `chore` | `type:chore` |
-| `style` | `type:chore` |
-| `perf` | `type:feature` |
-| `test` | `type:chore` |
-| `build` | `type:chore` |
-| `ci` | `type:chore` |
-| `revert` | `type:bug` |
-| `feat!` / `fix!` | `type:breaking-change` |
+PR labels describe the change's review category and do not need to repeat the commit type mechanically. Use only labels that exist in the target repository; stop instead of inventing one when none fits.
 
 Examples:
 ```
@@ -188,15 +169,17 @@ feat!: redesign skill loading system
 
 ```bash
 # Create branch
-git checkout -b feat/my-feature main
+git checkout -b docs/refresh-guide main
 
-# Run shellcheck before pushing
-shellcheck scripts/*.sh
+# Run the cheapest relevant check before pushing
+node scripts/verify-package-files.mjs
 
 # Push and create PR
-git push -u origin feat/my-feature
-gh pr create --title "feat(scope): description" --body "Closes #N"
+git push -u origin docs/refresh-guide
+cp .github/PULL_REQUEST_TEMPLATE.md /tmp/pr-body.md
+# Complete every required field in /tmp/pr-body.md before publishing.
+gh pr create --title "docs(scope): description" --body-file /tmp/pr-body.md
 
 # Add type label to PR
-gh pr edit <pr-number> --add-label "type:feature"
+gh pr edit <pr-number> --add-label "type:docs"
 ```

@@ -11,10 +11,14 @@ metadata:
 
 Use this skill when preparing, publishing, or verifying a `shevanio-pi` release.
 
+## Current Readiness Gate
+
+Stop before release preparation or workflow dispatch while any of these facts remains true: `shevanio-pi` is unpublished, the repository has no `npm` environment, npm trusted publishing is not configured, or explicit publication authorization is absent. The checked-in workflow is a gated future release path, not proof that publication is operational.
+
 ## Hard Rules
 
 - Do not publish `shevanio-pi` to npm from a local machine.
-- npm publishing MUST go through the GitHub Actions workflow `.github/workflows/publish.yml` so provenance, environment protection, and registry credentials are controlled by GitHub.
+- npm publishing MUST go through `.github/workflows/publish.yml` after the readiness gate is separately satisfied so provenance, environment protection, and trusted OIDC publication are controlled by GitHub.
 - Dispatch the trusted workflow definition from protected default `main`, never from a release tag. Its only caller input is the exact annotated version tag.
 - Use a clean worktree for release commits. Do not package unrelated local files or scratch artifacts.
 - Review outcomes are informational. Release delivery follows ordinary repository policy and must not be blocked, authorized, or rewritten by RDD.
@@ -22,6 +26,8 @@ Use this skill when preparing, publishing, or verifying a `shevanio-pi` release.
 - Never skip package verification. The publish workflow runs verification again, but local validation should still pass before tagging.
 
 ## Release Procedure
+
+Follow this procedure only after maintainers explicitly confirm every readiness-gate condition. Do not create missing environments, trust relationships, credentials, tags, releases, or version changes as an implicit part of running this skill.
 
 1. **Inspect state**
 
