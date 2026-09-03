@@ -65,7 +65,7 @@ The canonical packages are not published on npm. Use the source repository for S
 | --- | --- | --- |
 | `shevanio-pi` | Unpublished | Canonical package/runtime identity. Install from the canonical Git repository for evaluation or development. |
 | `shevanio-engram` | Unpublished | Canonical memory-package identity. No canonical installation command is available. |
-| `gentle-pi` | Published upstream | Transitional compatibility package for existing deployments, not the canonical product or a new-install recommendation. |
+| `gentle-pi` | Published upstream | `gentle-pi` is a transitional compatibility package for existing deployments, not the canonical product or a new-install recommendation. |
 | `gentle-engram` | Published upstream | Transitional compatibility package used by some existing memory integrations, not the canonical memory identity. |
 
 Review package source before installation because Pi packages execute with the user's permissions. With Pi already installed, the supported Git-source form is:
